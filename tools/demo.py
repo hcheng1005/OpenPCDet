@@ -1,6 +1,9 @@
 import argparse
 import glob
 from pathlib import Path
+from xml.etree.ElementTree import PI
+import math
+import poyo
 
 try:
     import open3d
@@ -21,7 +24,7 @@ from pcdet.utils import common_utils
 
 
 class DemoDataset(DatasetTemplate):
-    def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None, ext='.bin'):
+    def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None, ext='.npy'):
         """
         Args:
             root_path:
@@ -45,7 +48,18 @@ class DemoDataset(DatasetTemplate):
 
     def __getitem__(self, index):
         if self.ext == '.bin':
-            points = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 4)
+            points1 = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 5)
+            points = points1[:, 0:4]
+            
+            theta = math.pi / -2.0
+            rotM = np.array([   [math.cos(theta), math.sin(theta), 0],
+                                [-1*math.sin(theta), math.cos(theta), 0],
+                                [0, 0, 1]])
+            # print(rotM)
+
+            points[:,0:3] = points[:,0:3].dot(rotM)
+            points[:,3] = 0
+
         elif self.ext == '.npy':
             points = np.load(self.sample_file_list[index])
         else:
@@ -90,6 +104,12 @@ def main():
     model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
     model.cuda()
     model.eval()
+
+    vis = open3d.visualization.Visualizer()
+    vis.create_window()
+    vis.get_render_option().point_size = 2.0
+    vis.get_render_option().background_color = np.zeros(3)
+
     with torch.no_grad():
         for idx, data_dict in enumerate(demo_dataset):
             logger.info(f'Visualized sample index: \t{idx + 1}')
@@ -97,7 +117,7 @@ def main():
             load_data_to_gpu(data_dict)
             pred_dicts, _ = model.forward(data_dict)
 
-            V.draw_scenes(
+            V.draw_scenes(vis,
                 points=data_dict['points'][:, 1:], ref_boxes=pred_dicts[0]['pred_boxes'],
                 ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels']
             )
@@ -107,6 +127,8 @@ def main():
 
     logger.info('Demo done.')
 
+
+#  python demo.py --cfg_file cfgs/nuscenes_models/cbgs_voxel01_res3d_centerpoint.yaml --ckpt cfgs/ckpt/nuScenes/cbgs_voxel01_centerpoint_nds_6454.pth --data_path /home/charles/桌面/simpleLiDAR_DataSet/
 
 if __name__ == '__main__':
     main()

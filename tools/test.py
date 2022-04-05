@@ -134,6 +134,7 @@ def repeat_eval_ckpt(model, test_loader, args, eval_output_dir, logger, ckpt_dir
 
 def main():
     args, cfg = parse_config()
+    print(cfg)
     if args.launcher == 'none':
         dist_test = False
         total_gpus = 1

@@ -1,5 +1,5 @@
 DATASET: 'NuScenesDataset'
-DATA_PATH: '../data/nuscenes'
+DATA_PATH: '/media/charles/ShareDisk/00myDataSet/nuScenes/00SourceFile'
 
 VERSION: 'v1.0-trainval'
 MAX_SWEEPS: 10
