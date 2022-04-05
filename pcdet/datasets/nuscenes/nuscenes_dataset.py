@@ -25,6 +25,7 @@ class NuScenesDataset(DatasetTemplate):
         self.logger.info('Loading NuScenes dataset')
         nuscenes_infos = []
 
+        print(self.dataset_cfg.INFO_PATH[mode])
         for info_path in self.dataset_cfg.INFO_PATH[mode]:
             info_path = self.root_path / info_path
             if not info_path.exists():
@@ -119,6 +120,8 @@ class NuScenesDataset(DatasetTemplate):
             index = index % len(self.infos)
 
         info = copy.deepcopy(self.infos[index])
+
+
         points = self.get_lidar_with_sweeps(index, max_sweeps=self.dataset_cfg.MAX_SWEEPS)
 
         input_dict = {
@@ -358,6 +361,7 @@ if __name__ == '__main__':
     if args.func == 'create_nuscenes_infos':
         dataset_cfg = EasyDict(yaml.safe_load(open(args.cfg_file)))
         ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
+        ROOT_DIR = (Path('/home/charles/myDataSet/nuScenes/v1.0-test_blobs_lidar').resolve())
         dataset_cfg.VERSION = args.version
         create_nuscenes_info(
             version=dataset_cfg.VERSION,

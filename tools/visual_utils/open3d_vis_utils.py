@@ -9,10 +9,13 @@ import matplotlib
 import numpy as np
 
 box_colormap = [
-    [1, 1, 1],
-    [0, 1, 0],
-    [0, 1, 1],
-    [1, 1, 0],
+    np.array([140, 140, 136]) / 256,
+    np.array([4, 157, 217]) / 256,
+    np.array([191, 4, 54]) / 256,
+    np.array([0, 0, 0]) / 256,
+    np.array([224, 133, 250]) / 256, 
+    np.array([32, 64, 40]) / 256,
+    np.array([77, 115, 67]) / 256
 ]
 
 
@@ -58,17 +61,15 @@ def draw_scenes(vis, points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref
         pts.colors = open3d.utility.Vector3dVector(point_colors)
 
     if gt_boxes is not None:
-        print(gt_boxes.shape[0])
         vis = draw_box(vis, gt_boxes, (0, 0, 1))
   
     if ref_boxes is not None:
-        # vis = draw_box(vis, ref_boxes, (0, 1, 0), ref_labels, ref_scores):
-        vis = draw_box(vis, ref_boxes, (0, 1, 0))
+        vis = draw_box(vis, ref_boxes, (0, 1, 0), ref_labels, ref_scores)
 
     vis.poll_events()
     vis.update_renderer()
-
     vis.clear_geometries()
+
 
 
 def translate_boxes_to_open3d_instance(gt_boxes):
@@ -100,15 +101,16 @@ def translate_boxes_to_open3d_instance(gt_boxes):
 
 def draw_box(vis, gt_boxes, color=(0, 1, 0), ref_labels=None, score=None):
     for i in range(gt_boxes.shape[0]):
-        line_set, box3d = translate_boxes_to_open3d_instance(gt_boxes[i])
-        if ref_labels is None:
-            line_set.paint_uniform_color(color)
-        else:
-            line_set.paint_uniform_color(box_colormap[ref_labels[i]])
+        if ref_labels[i] < 2:
+            line_set, box3d = translate_boxes_to_open3d_instance(gt_boxes[i])
+            if ref_labels is None:
+                line_set.paint_uniform_color(color)
+            else:
+                line_set.paint_uniform_color(box_colormap[ref_labels[i]])
 
-        vis.add_geometry(line_set)
+            vis.add_geometry(line_set)
 
-        # if score is not None:
-        #     corners = box3d.get_box_points()
-        #     vis.add_3d_label(corners[5], '%.2f' % score[i])
+            # if score is not None:
+            #     corners = box3d.get_box_points()
+            #     vis.add_3d_label(corners[5], '%.2f' % score[i])
     return vis

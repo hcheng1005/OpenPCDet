@@ -52,18 +52,23 @@ def eval_one_epoch(cfg, model, dataloader, epoch_id, logger, dist_test=False, sa
     if cfg.LOCAL_RANK == 0:
         progress_bar = tqdm.tqdm(total=len(dataloader), leave=True, desc='eval', dynamic_ncols=True)
     start_time = time.time()
+
+    #循环遍历数据集
     for i, batch_dict in enumerate(dataloader):
         load_data_to_gpu(batch_dict)
         with torch.no_grad():
+            #使用模型进行预测
             pred_dicts, ret_dict = model(batch_dict)
         disp_dict = {}
 
         statistics_info(cfg, ret_dict, metric, disp_dict)
-        annos = dataset.generate_prediction_dicts(
-            batch_dict, pred_dicts, class_names,
-            output_path=final_output_dir if save_to_file else None
-        )
-        det_annos += annos
+        
+        # annos = dataset.generate_prediction_dicts(
+        #     batch_dict, pred_dicts, class_names,
+        #     output_path=final_output_dir if save_to_file else None
+        # )
+        # det_annos += annos
+        
         if cfg.LOCAL_RANK == 0:
             progress_bar.set_postfix(disp_dict)
             progress_bar.update()

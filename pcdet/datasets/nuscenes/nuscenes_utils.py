@@ -157,7 +157,7 @@ cls_attr_dist = {
 def get_available_scenes(nusc):
     available_scenes = []
     print('total scene num:', len(nusc.scene))
-    for scene in nusc.scene:
+    for scene in nusc.scene[0:80]:
         scene_token = scene['token']
         scene_rec = nusc.get('scene', scene_token)
         sample_rec = nusc.get('sample', scene_rec['first_sample_token'])
@@ -257,7 +257,7 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
     ref_chan = 'LIDAR_TOP'  # The radar channel from which we track back n sweeps to aggregate the point cloud.
     chan = 'LIDAR_TOP'  # The reference channel of the current sample_rec that the point clouds are mapped to.
 
-    for index, sample in enumerate(nusc.sample):
+    for index, sample in enumerate(nusc.sample[0:3000]):
         progress_bar.update()
 
         ref_sd_token = sample['data'][ref_chan]

@@ -3,18 +3,17 @@ import glob
 from pathlib import Path
 from xml.etree.ElementTree import PI
 import math
+from pandas import read_pickle
 import poyo
 
 from pcdet.datasets.nuscenes.nuscenes_dataset import NuScenesDataset
 
-try:
-    import open3d
-    from visual_utils import open3d_vis_utils as V
-    OPEN3D_FLAG = True
-except:
-    import mayavi.mlab as mlab
-    from visual_utils import visualize_utils as V
-    OPEN3D_FLAG = False
+import matplotlib.pyplot as plt
+
+import open3d
+from visual_utils import open3d_vis_utils as V
+OPEN3D_FLAG = True
+
 
 import numpy as np
 import torch
@@ -49,48 +48,19 @@ class DemoDataset(DatasetTemplate):
         return len(self.sample_file_list)
 
     def __getitem__(self, index):
-        # if self.ext == '.bin':
-        #     points1 = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 5)
-        #     points = points1[:, 0:5]            
-        #     # theta = math.pi / -2.0
-        #     # rotM = np.array([   [math.cos(theta), math.sin(theta), 0],
-        #     #                     [-1*math.sin(theta), math.cos(theta), 0],
-        #     #                     [0, 0, 1]])
-        #     # # print(rotM)
-
-        #     # points[:,0:3] = points[:,0:3].dot(rotM)
-        #     # points[:,3] = 0
-
-        # elif self.ext == '.npy':
-        #     points = np.load(self.sample_file_list[index])
-        # else:
-        #     raise NotImplementedError
-
-        # input_dict = {
-        #     'points': points,
-        #     'frame_id': index,
-        # }
-
-        # data_dict = self.prepare_data(data_dict=input_dict)
-        # return data_dict
-
         points = np.fromfile(self.sample_file_list[index], dtype=np.float32, count=-1).reshape([-1, 5])[:, :4]
 
         sweep_points_list = [points]
         sweep_times_list = [np.zeros((points.shape[0], 1))]
 
-        # for k in np.random.choice(len(info['sweeps']), max_sweeps - 1, replace=False):
-        #     points_sweep, times_sweep = self.get_sweep(info['sweeps'][k])
-        #     sweep_points_list.append(points_sweep)
-        #     sweep_times_list.append(times_sweep)
-
         points = np.concatenate(sweep_points_list, axis=0)
         times = np.concatenate(sweep_times_list, axis=0).astype(points.dtype)
 
         points = np.concatenate((points, times), axis=1)
+
         input_dict = {
             'points': points,
-            'frame_id': index,
+            'frame_id': times,
         }
 
         data_dict = self.prepare_data(data_dict=input_dict)
@@ -103,6 +73,7 @@ def parse_config():
     cfg_file="cfgs/nuscenes_models/cbgs_voxel01_res3d_centerpoint.yaml"
     ckpt="cfgs/ckpt/nuScenes/cbgs_voxel01_centerpoint_nds_6454.pth"
     data_path="/media/charles/ShareDisk/00myDataSet/nuScenes/00SourceFile/v1.0-trainval/sweeps/LIDAR_TOP/"
+
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--cfg_file', type=str, default=cfg_file,
                         help='specify the config for demo')
@@ -121,7 +92,7 @@ def parse_config():
 def main():
     args, cfg = parse_config()
     logger = common_utils.create_logger()
-    logger.info('-----------------Quick Demo of OpenPCDet-------------------------')
+    logger.info('-----------------Quick nuScenes Demo of OpenPCDet-------------------------')
 
     #加载数据集
     demo_dataset = DemoDataset(
@@ -141,10 +112,13 @@ def main():
     model.eval()
 
     #3D界面初始化
-    vis = open3d.visualization.Visualizer()
-    vis.create_window()
-    vis.get_render_option().point_size = 1.0
-    vis.get_render_option().background_color = np.zeros(3)
+    # vis = open3d.visualization.Visualizer()
+    # vis.create_window()
+    # vis.get_render_option().point_size = 1.0
+    # vis.get_render_option().background_color = np.zeros(3)
+
+    plt.figure()
+    plt.ion() 
 
     with torch.no_grad():
         for idx, data_dict in enumerate(demo_dataset):
@@ -153,15 +127,55 @@ def main():
             load_data_to_gpu(data_dict)
             pred_dicts, _ = model.forward(data_dict)
             
-            V.draw_scenes(vis,
-                points=data_dict['points'][:, 1:], ref_boxes=pred_dicts[0]['pred_boxes'],
-                ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels']
-            )
+            # #数据可视化
+            # V.draw_scenes(vis,
+            #     
+            #     ref_boxes=pred_dicts[0]['pred_boxes'],
+            #     ref_scores=pred_dicts[0]['pred_scores'], 
+            #     ref_labels=pred_dicts[0]['pred_labels']
+            # )
 
-            if not OPEN3D_FLAG:
-                mlab.show(stop=True)
+            
+            
+            points=data_dict['points'][:, 1:]
+            pred_boxes=pred_dicts[0]['pred_boxes']
 
-    logger.info('Demo done.')
+            if isinstance(points, torch.Tensor):
+                points = points.cpu().numpy()
+
+            if isinstance(pred_boxes, torch.Tensor):
+                pred_boxes = pred_boxes.cpu().numpy()
+
+            pred_boxes_array=np.array(points) 
+            ref_boxes_array = (np.array(pred_boxes))
+            # print(type(ref_boxes2))
+            # print(np.shape(ref_boxes2))
+
+            plt.scatter(pred_boxes_array[:, 0], pred_boxes_array[:, 1], marker='o', s=0.01)
+
+            for i in range(pred_boxes.shape[0]):
+                # if ref_labels[i] < 2:
+                    # line_set, box3d = translate_boxes_to_open3d_instance(pred_boxes[i])
+                pred_boxes2 = pred_boxes[i]
+                center = pred_boxes2[0:3]
+                lwh = pred_boxes2[3:6]
+                axis_angles = np.array([0, 0, pred_boxes2[6] + 1e-10])
+                rot = open3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
+                box3d = open3d.geometry.OrientedBoundingBox(center, rot, lwh)
+                corners2 = np.asarray(box3d.get_box_points())
+                # print(corners2)
+                corners = np.array(corners2[:, :2])
+                corners = np.concatenate([corners, corners[0:1, :2]])
+                plt.plot(corners[:, 0], corners[:, 1], linestyle='solid')
+
+            plt.show()
+            plt.pause(0.01)
+            plt.clf()
+            # for i in range(np.shape(ref_boxes)[0]):
+                # print(i)
+                
+
+    logger.info('nuScenes Demo done.')
 
 
 if __name__ == '__main__':
