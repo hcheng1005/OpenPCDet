@@ -1,22 +1,12 @@
 import argparse
 import glob
 from pathlib import Path
-from xml.etree.ElementTree import PI
-import math
-from pandas import read_pickle
-import poyo
-
-from pcdet.datasets.nuscenes.nuscenes_dataset import NuScenesDataset
-
-import matplotlib.pyplot as plt
 
 import open3d
 from visual_utils import open3d_vis_utils as V
 
-import numpy as np
+import os, numpy as np, argparse, json, sys, numba, yaml, multiprocessing, shutil, cv2
 import torch
-
-import cv2
 
 from pcdet.config import cfg, cfg_from_yaml_file
 from pcdet.datasets import DatasetTemplate
@@ -29,6 +19,7 @@ from mot_3d.data_protos import BBox, Validity
 from mot_3d.mot import MOTModel
 from mot_3d.frame_data import FrameData
 
+import cv2
 
 class DemoDataset(DatasetTemplate):
     def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None, ext='.bin'):
@@ -94,6 +85,11 @@ def parse_config():
     return args, cfg
 
 
+def nuScenes_MOT(tracker, input_data: FrameData):
+    results = tracker.frame_mot(input_data)
+    return results
+
+
 def main():
     args, cfg = parse_config()
     logger = common_utils.create_logger()
@@ -109,6 +105,11 @@ def main():
 
     logger.info(f'Total number of samples: \t{len(demo_dataset)}')
 
+    # 加载摄像头数据
+    img_path = "/media/charles/ShareDisk/00myDataSet/nuScenes/00SourceFile/v1.0-trainval/samples/CAM_FRONT/"
+    img_file_list = glob.glob(str(Path(img_path) / f'*.jpg'))
+    img_file_list.sort()
+
     #加载模型
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=demo_dataset)
     
@@ -123,20 +124,12 @@ def main():
     vis.get_render_option().point_size = 1.0
     vis.get_render_option().background_color = np.zeros(3)
 
-    # plt.figure()
-    # plt.ion() 
-    # plt.axis('equal')
-    img_path = "/media/charles/ShareDisk/00myDataSet/nuScenes/00SourceFile/v1.0-trainval/samples/CAM_FRONT/"
-    img_file_list = glob.glob(str(Path(img_path) / f'*.jpg'))
-    img_file_list.sort()
-
-    # print(img_file_list[0])
-    # image = cv2.imread(img_file_list[0])
-    # cv2.imshow('xx',image)
-    # cv2.waitKey(0)
-
-    # return
-    
+    # 跟踪器初始化
+    # load model configs
+    config_path ='../3DMOT_configs/nuScenes_cfg/giou.yaml'
+    configs = yaml.load(open(config_path, 'r'), Loader=yaml.Loader)
+    tracker = MOTModel(configs)
+    IDs, bboxes, states, types = list(), list(), list(), list()
 
     with torch.no_grad():
         for idx, data_dict in enumerate(demo_dataset):
@@ -145,14 +138,14 @@ def main():
             load_data_to_gpu(data_dict)
             pred_dicts, _ = model.forward(data_dict)
 
-            #CAMERA显示
+            # CAMERA显示
             image = cv2.imread(img_file_list[idx])
             cv2.namedWindow("CAM FRONT",0)
             cv2.resizeWindow("CAM FRONT", 640, 480)
             cv2.imshow('CAM FRONT',image)
             cv2.waitKey(1)
             
-            #原始点云和检测显示
+            # 原始点云和检测显示
             V.draw_scenes(vis,
                 points=data_dict['points'][:, 1:], 
                 ref_boxes=pred_dicts[0]['pred_boxes'],
@@ -161,43 +154,13 @@ def main():
             )
 
             # 跟踪算法 
+            ref_boxes=pred_dicts[0]['pred_boxes']
+            if isinstance(ref_boxes, torch.Tensor):
+                ref_boxes = ref_boxes.cpu().numpy()
+            frame_data = FrameData(dets=ref_boxes, ego=None, time_stamp=None, pc=None, det_types=None, aux_info=None)
+            results = tracker.frame_mot(frame_data)
+            print(results)
 
-            # points=data_dict['points'][:, 1:]
-            # pred_boxes=pred_dicts[0]['pred_boxes']
-
-            # if isinstance(points, torch.Tensor):
-            #     points = points.cpu().numpy()
-
-            # if isinstance(pred_boxes, torch.Tensor):
-            #     pred_boxes = pred_boxes.cpu().numpy()
-
-            # pred_boxes_array=np.array(points) 
-            # ref_boxes_array = (np.array(pred_boxes))
- 
-            # #绘制原始点云数据
-            # plt.scatter(pred_boxes_array[:, 0], pred_boxes_array[:, 1], marker='o', s=0.01)
-
-            # #绘制检测dets
-            # for i in range(pred_boxes.shape[0]):
-            #     # if ref_labels[i] < 2:
-            #         # line_set, box3d = translate_boxes_to_open3d_instance(pred_boxes[i])
-            #     pred_boxes2 = pred_boxes[i]
-            #     center = pred_boxes2[0:3]
-            #     lwh = pred_boxes2[3:6]
-            #     axis_angles = np.array([0, 0, pred_boxes2[6] + 1e-10])
-            #     rot = open3d.geometry.get_rotation_matrix_from_axis_angle(axis_angles)
-            #     box3d = open3d.geometry.OrientedBoundingBox(center, rot, lwh)
-            #     corners2 = np.asarray(box3d.get_box_points())
-            #     # print(corners2)
-            #     corners = np.array(corners2[:, :2])
-            #     corners = np.concatenate([corners, corners[0:1, :2]])
-            #     plt.plot(corners[:, 0], corners[:, 1], linestyle='solid')
-
-            # plt.show()
-            # plt.pause(0.1)
-            # plt.clf()
-            # # for i in range(np.shape(ref_boxes)[0]):
-            #     # print(i)
                 
 
     logger.info('nuScenes Demo done.')

@@ -65,7 +65,7 @@ def draw_scenes(vis, points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref
   
     if ref_boxes is not None:
         vis = draw_box(vis, ref_boxes, (0, 1, 0), ref_labels, ref_scores)
-        
+
     vis.poll_events()
     vis.update_renderer()
     vis.clear_geometries()
@@ -101,7 +101,7 @@ def translate_boxes_to_open3d_instance(gt_boxes):
 
 def draw_box(vis, gt_boxes, color=(0, 1, 0), ref_labels=None, score=None):
     for i in range(gt_boxes.shape[0]):
-        if ref_labels[i] < 2:
+        if ref_labels[i] < 4:
             line_set, box3d = translate_boxes_to_open3d_instance(gt_boxes[i])
             if ref_labels is None:
                 line_set.paint_uniform_color(color)
