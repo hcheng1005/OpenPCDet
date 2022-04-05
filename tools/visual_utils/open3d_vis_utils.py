@@ -65,7 +65,7 @@ def draw_scenes(vis, points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref
   
     if ref_boxes is not None:
         vis = draw_box(vis, ref_boxes, (0, 1, 0), ref_labels, ref_scores)
-
+        
     vis.poll_events()
     vis.update_renderer()
     vis.clear_geometries()
