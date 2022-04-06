@@ -67,7 +67,7 @@ class DemoDataset(DatasetTemplate):
 def parse_config():
     cfg_file="cfgs/nuscenes_models/cbgs_voxel01_res3d_centerpoint.yaml"
     ckpt="cfgs/ckpt/nuScenes/cbgs_voxel01_centerpoint_nds_6454.pth"
-    data_path="/media/charles/ShareDisk/00myDataSet/nuScenes/00SourceFile/v1.0-trainval/samples/LIDAR_TOP/"
+    data_path="/home/charles/myDataSet/nuScenes/v1.0-mini/samples/LIDAR_TOP/"
     # data_path='/home/charles/myDataSet/nuScenes/v1.0-mini/samples/LIDAR_TOP/'
 
     parser = argparse.ArgumentParser(description='arg parser')
@@ -106,7 +106,7 @@ def main():
     logger.info(f'Total number of samples: \t{len(demo_dataset)}')
 
     # 加载摄像头数据
-    img_path = "/media/charles/ShareDisk/00myDataSet/nuScenes/00SourceFile/v1.0-trainval/samples/CAM_FRONT/"
+    img_path = "/home/charles/myDataSet/nuScenes/v1.0-mini/samples/CAM_FRONT/"
     img_file_list = glob.glob(str(Path(img_path) / f'*.jpg'))
     img_file_list.sort()
 
@@ -138,12 +138,12 @@ def main():
             load_data_to_gpu(data_dict)
             pred_dicts, _ = model.forward(data_dict)
 
-            # CAMERA显示
-            image = cv2.imread(img_file_list[idx])
-            cv2.namedWindow("CAM FRONT",0)
-            cv2.resizeWindow("CAM FRONT", 640, 480)
-            cv2.imshow('CAM FRONT',image)
-            cv2.waitKey(1)
+            # # CAMERA显示
+            # image = cv2.imread(img_file_list[idx])
+            # cv2.namedWindow("CAM FRONT",0)
+            # cv2.resizeWindow("CAM FRONT", 640, 480)
+            # cv2.imshow('CAM FRONT',image)
+            # cv2.waitKey(1)
             
             # 原始点云和检测显示
             V.draw_scenes(vis,
@@ -162,7 +162,6 @@ def main():
             print(results)
 
                 
-
     logger.info('nuScenes Demo done.')
 
 
