@@ -62,12 +62,10 @@ with open(ego_info_path,'r') as load_f:
 base_path = data_root_path + 'sweeps/LIDAR_TOP/'
 files = os.listdir(base_path)
 # files.sort(key=lambda x: int(x.split('.')[0]))
-files.sort(key=lambda x: int(x[42:58]))
+files.sort(key=lambda x: int(x[42:58])) #根据字符串42-58（转换成数字）进行文件排序
 for file in files:
-    # os.path.join(base_path,file)
-    # print(file)
-    print(file)
     Timestamp = file[42:58]
     for j in range(sample_data_dict.__len__()):
         if str(sample_data_dict[j]['timestamp']) == Timestamp:
+            print(sample_data_dict[j]['ego_pose_token'])
             #进一步获取相关信息
