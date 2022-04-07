@@ -96,7 +96,7 @@ class MOTModel:
             else:
                 aux_info = {'is_key_frame': input_data.aux_info['is_key_frame']}
 
-            track = tracklet.Tracklet(self.configs, self.count, input_data.dets[index], input_data.det_types[index], 
+            track = tracklet.Tracklet(self.configs, self.count, input_data.dets[index], 1, 
                 self.frame_count, aux_info=aux_info, time_stamp=input_data.time_stamp)
             self.trackers.append(track)
             self.count += 1

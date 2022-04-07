@@ -232,22 +232,22 @@ def giou3d(box_a: BBox, box_b: BBox):
     convex_area = PolyArea2D(convex_corners)
     C = convex_area * union_height
 
-    if I != 0.0:
-        print("---------------------------------- \n")
-        print("boxa_corners \n", boxa_corners)
-        print("boxb_corners \n", boxb_corners)
-        print("convex_corners \n", convex_corners)
+    # if I != 0.0:
+    #     print("---------------------------------- \n")
+    #     print("boxa_corners \n", boxa_corners)
+    #     print("boxb_corners \n", boxb_corners)
+    #     print("convex_corners \n", convex_corners)
 
-        print("reca \n", reca)
-        print("recb \n", recb)
-        print("convex_area \n", convex_area)
+    #     print("reca \n", reca)
+    #     print("recb \n", recb)
+    #     print("convex_area \n", convex_area)
 
-        print("overlap_height \n", overlap_height)
-        print("union_height \n", union_height)
+    #     print("overlap_height \n", overlap_height)
+    #     print("union_height \n", union_height)
 
-        # print("overlap_height \n", overlap_height)
+    #     # print("overlap_height \n", overlap_height)
 
-        print("I \n", I)
+    #     print("I \n", I)
 
     # compute giou
     giou = I / U - (C - U) / C
