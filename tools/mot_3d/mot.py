@@ -54,9 +54,9 @@ class MOTModel:
         if self.time_stamp is None:
             self.time_stamp = input_data.time_stamp
 
-        # if not input_data.aux_info['is_key_frame']:
-        #     result = self.non_key_frame_mot(input_data)
-        #     return result
+        if not input_data.aux_info['is_key_frame']:
+            result = self.non_key_frame_mot(input_data)
+            return result
     
         if 'kf' in self.motion_model:
             matched, unmatched_dets, unmatched_trks = self.forward_step_trk(input_data)

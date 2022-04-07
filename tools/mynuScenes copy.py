@@ -12,10 +12,10 @@ import time
 import open3d
 
 
-# vis = open3d.visualization.Visualizer()
-# vis.create_window()
-# vis.get_render_option().point_size = 1.0
-# vis.get_render_option().background_color = np.zeros(3)
+vis = open3d.visualization.Visualizer()
+vis.create_window()
+vis.get_render_option().point_size = 1.0
+vis.get_render_option().background_color = np.zeros(3)
 
 #数据地址
 data_root_path = '/home/charles/myDataSet/nuScenes/v1.0-mini/'
@@ -67,5 +67,27 @@ for file in files:
     Timestamp = file[42:58]
     for j in range(sample_data_dict.__len__()):
         if str(sample_data_dict[j]['timestamp']) == Timestamp:
-            print(sample_data_dict[j]['ego_pose_token'])
-            #进一步获取相关信息
+            ego_pose_token = sample_data_dict[j]['ego_pose_token']
+            for j1 in range(ego_info_dict.__len__()):
+                if ego_info_dict[j1]['token'] == ego_pose_token:
+                    rotation = ego_info_dict[j1]['rotation']
+                    translation = ego_info_dict[j1]['translation']
+                    break
+
+            break 
+
+    
+    points = np.fromfile(base_path + '/' + file, dtype=np.float32, count=-1).reshape([-1, 5])[:, :4]
+
+    rotaMat = np.array(rotation)
+    # transMat = transMat[:,0:4] + np.array(translation).reshape([1,3])
+
+    pts = open3d.geometry.PointCloud()
+    pts.points = open3d.utility.Vector3dVector(points[:, :3])
+
+    vis.add_geometry(pts)
+    vis.poll_events()
+    vis.update_renderer()
+    # time.sleep(0.05)
+    vis.clear_geometries()
+

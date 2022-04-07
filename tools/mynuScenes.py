@@ -19,7 +19,7 @@ from mot_3d.data_protos import BBox, Validity
 from mot_3d.mot import MOTModel
 from mot_3d.frame_data import FrameData
 
-import cv2
+import time
 
 class DemoDataset(DatasetTemplate):
     def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None, ext='.bin'):
@@ -133,6 +133,7 @@ def main():
 
     with torch.no_grad():
         for idx, data_dict in enumerate(demo_dataset):
+            millis = int(round(time.time() * 1000))
             logger.info(f'Visualized sample index: \t{idx + 1}')
             data_dict = demo_dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict)
@@ -154,12 +155,28 @@ def main():
             )
 
             # 跟踪算法 
-            ref_boxes=pred_dicts[0]['pred_boxes']
-            if isinstance(ref_boxes, torch.Tensor):
-                ref_boxes = ref_boxes.cpu().numpy()
-            frame_data = FrameData(dets=ref_boxes, ego=None, time_stamp=None, pc=None, det_types=None, aux_info=None)
+            ref_boxes= pred_dicts[0]['pred_boxes']
+            ref_boxes = ref_boxes.cpu().numpy()
+
+            ref_scores=pred_dicts[0]['pred_scores']
+            ref_scores= ref_scores.cpu().numpy()
+
+            newdets = np.hstack((ref_boxes, ref_scores.reshape([-1, 1])))
+
+            points = data_dict['points'][:, 1:]
+            points = points.cpu().numpy()
+
+            # print(np.shape(ref_boxes))
+            # print(np.shape(ref_scores))
+            # print(np.shape(newdets))
+
+            aux_info = {'is_key_frame':True}
+
+            newdets = newdets.tolist()
+
+            frame_data = FrameData(dets=newdets, ego=None, time_stamp=millis, pc=points, det_types=None, aux_info=aux_info)
             results = tracker.frame_mot(frame_data)
-            print(results)
+            # print(results)
 
                 
     logger.info('nuScenes Demo done.')

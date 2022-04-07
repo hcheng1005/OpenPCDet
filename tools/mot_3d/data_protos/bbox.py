@@ -36,7 +36,7 @@ class BBox:
     def array2bbox(cls, data):
         bbox = BBox()
         bbox.x, bbox.y, bbox.z, bbox.o, bbox.l, bbox.w, bbox.h = data[:7]
-        if len(data) == 8:
+        if len(data) >= 8:
             bbox.s = data[-1]
         return bbox
     
