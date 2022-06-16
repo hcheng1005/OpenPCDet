@@ -168,36 +168,35 @@ def main():
                           ref_labels=pred_dicts[0]['pred_labels']
                           )
 
-            # 跟踪算法
-            ref_boxes = pred_dicts[0]['pred_boxes']
-            ref_boxes = ref_boxes.cpu().numpy()
+            # # 跟踪算法
+            # ref_boxes = pred_dicts[0]['pred_boxes']
+            # ref_boxes = ref_boxes.cpu().numpy()
 
-            ref_scores = pred_dicts[0]['pred_scores']
-            ref_scores = ref_scores.cpu().numpy()
+            # ref_scores = pred_dicts[0]['pred_scores']
+            # ref_scores = ref_scores.cpu().numpy()
 
-            ref_labels = pred_dicts[0]['pred_labels']
-            ref_labels = ref_labels.cpu().numpy()
+            # ref_labels = pred_dicts[0]['pred_labels']
+            # ref_labels = ref_labels.cpu().numpy()
 
-            # 格式转换
-            dets = np.hstack((ref_boxes, ref_scores.reshape([-1, 1])))
+            # # 格式转换
+            # dets = np.hstack((ref_boxes, ref_scores.reshape([-1, 1])))
 
-            points = data_dict['points'][:, 1:]
-            points = points.cpu().numpy()
+            # points = data_dict['points'][:, 1:]
+            # points = points.cpu().numpy()
 
-            aux_info = {'is_key_frame': True}
-            dets = dets.tolist()
+            # aux_info = {'is_key_frame': True}
+            # dets = dets.tolist()
 
-            # print(dets.__len__())
-            new_dets=list()
-            for idx, det in enumerate(dets):
-                if ref_labels[idx] == 1:
-                    new_dets.append(det)
-            # print(new_dets.__len__())
-
+            # # print(dets.__len__())
+            # new_dets=list()
+            # for idx, det in enumerate(dets):
+            #     if ref_labels[idx] == 1:
+            #         new_dets.append(det)
+            # # print(new_dets.__len__())
     
-            frame_data = FrameData(dets=new_dets, ego=None, time_stamp=millis, pc=points, det_types=None, aux_info=aux_info)
-            results = tracker.frame_mot(frame_data)
-            # print(results)
+            # frame_data = FrameData(dets=new_dets, ego=None, time_stamp=millis, pc=points, det_types=None, aux_info=aux_info)
+            # results = tracker.frame_mot(frame_data)
+            # # print(results)
 
     logger.info('nuScenes Demo done.')
 
