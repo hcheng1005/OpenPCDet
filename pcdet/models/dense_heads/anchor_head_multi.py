@@ -184,7 +184,8 @@ class AnchorHeadMulti(AnchorHeadTemplate):
             head_label_indices = torch.from_numpy(np.array([
                 self.class_names.index(cur_name) + 1 for cur_name in rpn_head_cfg['HEAD_CLS_NAME']
             ]))
-
+            
+            # 构造单检测头singleHead
             rpn_head = SingleHead(
                 self.model_cfg, input_channels,
                 len(rpn_head_cfg['HEAD_CLS_NAME']) if self.separate_multihead else self.num_class,
@@ -193,7 +194,7 @@ class AnchorHeadMulti(AnchorHeadTemplate):
                 separate_reg_config=self.model_cfg.get('SEPARATE_REG_CONFIG', None)
             )
             rpn_heads.append(rpn_head)
-        self.rpn_heads = nn.ModuleList(rpn_heads)
+        self.rpn_heads = nn.ModuleList(rpn_heads) # 多检测列表
 
     def forward(self, data_dict):
         spatial_features_2d = data_dict['spatial_features_2d']

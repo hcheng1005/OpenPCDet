@@ -1,5 +1,4 @@
-CLASS_NAMES: ['car','truck', 'construction_vehicle', 'bus', 'trailer',
-              'barrier', 'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone']
+CLASS_NAMES: ['car','truck']
 
 DATA_CONFIG:
     _BASE_CONFIG_: cfgs/dataset_configs/nuscenes_dataset.yaml
@@ -76,86 +75,6 @@ MODEL:
                 'matched_threshold': 0.55,
                 'unmatched_threshold': 0.4
             },
-            {
-                'class_name': construction_vehicle,
-                'anchor_sizes': [[6.37, 2.85, 3.19]],
-                'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [-0.225],
-                'align_center': False,
-                'feature_map_stride': 4,
-                'matched_threshold': 0.5,
-                'unmatched_threshold': 0.35
-            },
-            {
-                'class_name': bus,
-                'anchor_sizes': [[10.5, 2.94, 3.47]],
-                'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [-0.085],
-                'align_center': False,
-                'feature_map_stride': 4,
-                'matched_threshold': 0.55,
-                'unmatched_threshold': 0.4
-            },
-            {
-                'class_name': trailer,
-                'anchor_sizes': [[12.29, 2.90, 3.87]],
-                'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [0.115],
-                'align_center': False,
-                'feature_map_stride': 4,
-                'matched_threshold': 0.5,
-                'unmatched_threshold': 0.35
-            },
-            {
-                'class_name': barrier,
-                'anchor_sizes': [[0.50, 2.53, 0.98]],
-                'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [-1.33],
-                'align_center': False,
-                'feature_map_stride': 4,
-                'matched_threshold': 0.55,
-                'unmatched_threshold': 0.4
-            },
-            {
-                'class_name': motorcycle,
-                'anchor_sizes': [[2.11, 0.77, 1.47]],
-                'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [-1.085],
-                'align_center': False,
-                'feature_map_stride': 4,
-                'matched_threshold': 0.5,
-                'unmatched_threshold': 0.3
-            },
-            {
-                'class_name': bicycle,
-                'anchor_sizes': [[1.70, 0.60, 1.28]],
-                'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [-1.18],
-                'align_center': False,
-                'feature_map_stride': 4,
-                'matched_threshold': 0.5,
-                'unmatched_threshold': 0.35
-            },
-            {
-                'class_name': pedestrian,
-                'anchor_sizes': [[0.73, 0.67, 1.77]],
-                'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [-0.935],
-                'align_center': False,
-                'feature_map_stride': 4,
-                'matched_threshold': 0.6,
-                'unmatched_threshold': 0.4
-            },
-            {
-                'class_name': traffic_cone,
-                'anchor_sizes': [[0.41, 0.41, 1.07]],
-                'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [-1.285],
-                'align_center': False,
-                'feature_map_stride': 4,
-                'matched_threshold': 0.6,
-                'unmatched_threshold': 0.4
-            },
         ]
 
         SHARED_CONV_NUM_FILTER: 64
@@ -165,19 +84,7 @@ MODEL:
                 'HEAD_CLS_NAME': ['car'],
             },
             {
-                'HEAD_CLS_NAME': ['truck', 'construction_vehicle'],
-            },
-            {
-                'HEAD_CLS_NAME': ['bus', 'trailer'],
-            },
-            {
-                'HEAD_CLS_NAME': ['barrier'],
-            },
-            {
-                'HEAD_CLS_NAME': ['motorcycle', 'bicycle'],
-            },
-            {
-                'HEAD_CLS_NAME': ['pedestrian', 'traffic_cone'],
+                'HEAD_CLS_NAME': ['truck'],
             },
         ]
         SEPARATE_REG_CONFIG: 

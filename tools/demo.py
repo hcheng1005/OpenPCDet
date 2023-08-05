@@ -1,20 +1,15 @@
 import argparse
 import glob
 from pathlib import Path
-from xml.etree.ElementTree import PI
-import math
-import poyo
 
-from pcdet.datasets.nuscenes.nuscenes_dataset import NuScenesDataset
-
-try:
-    import open3d
-    from visual_utils import open3d_vis_utils as V
-    OPEN3D_FLAG = True
-except:
-    import mayavi.mlab as mlab
-    from visual_utils import visualize_utils as V
-    OPEN3D_FLAG = False
+# try:
+#     import open3d
+#     from visual_utils import open3d_vis_utils as V
+#     OPEN3D_FLAG = True
+# except:
+import mayavi.mlab as mlab
+from visual_utils import visualize_utils as V
+OPEN3D_FLAG = False
 
 import numpy as np
 import torch
@@ -49,45 +44,13 @@ class DemoDataset(DatasetTemplate):
         return len(self.sample_file_list)
 
     def __getitem__(self, index):
-        # if self.ext == '.bin':
-        #     points1 = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 5)
-        #     points = points1[:, 0:5]            
-        #     # theta = math.pi / -2.0
-        #     # rotM = np.array([   [math.cos(theta), math.sin(theta), 0],
-        #     #                     [-1*math.sin(theta), math.cos(theta), 0],
-        #     #                     [0, 0, 1]])
-        #     # # print(rotM)
+        if self.ext == '.bin':
+            points = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 4)
+        elif self.ext == '.npy':
+            points = np.load(self.sample_file_list[index])
+        else:
+            raise NotImplementedError
 
-        #     # points[:,0:3] = points[:,0:3].dot(rotM)
-        #     # points[:,3] = 0
-
-        # elif self.ext == '.npy':
-        #     points = np.load(self.sample_file_list[index])
-        # else:
-        #     raise NotImplementedError
-
-        # input_dict = {
-        #     'points': points,
-        #     'frame_id': index,
-        # }
-
-        # data_dict = self.prepare_data(data_dict=input_dict)
-        # return data_dict
-
-        points = np.fromfile(self.sample_file_list[index], dtype=np.float32, count=-1).reshape([-1, 5])[:, :4]
-
-        sweep_points_list = [points]
-        sweep_times_list = [np.zeros((points.shape[0], 1))]
-
-        # for k in np.random.choice(len(info['sweeps']), max_sweeps - 1, replace=False):
-        #     points_sweep, times_sweep = self.get_sweep(info['sweeps'][k])
-        #     sweep_points_list.append(points_sweep)
-        #     sweep_times_list.append(times_sweep)
-
-        points = np.concatenate(sweep_points_list, axis=0)
-        times = np.concatenate(sweep_times_list, axis=0).astype(points.dtype)
-
-        points = np.concatenate((points, times), axis=1)
         input_dict = {
             'points': points,
             'frame_id': index,
@@ -97,18 +60,13 @@ class DemoDataset(DatasetTemplate):
         return data_dict
 
 
-
-
 def parse_config():
-    cfg_file="cfgs/nuscenes_models/cbgs_voxel01_res3d_centerpoint.yaml"
-    ckpt="cfgs/ckpt/nuScenes/cbgs_voxel01_centerpoint_nds_6454.pth"
-    data_path="/media/charles/ShareDisk/00myDataSet/nuScenes/00SourceFile/v1.0-trainval/sweeps/LIDAR_TOP/"
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--cfg_file', type=str, default=cfg_file,
+    parser.add_argument('--cfg_file', type=str, default='cfgs/kitti_models/second.yaml',
                         help='specify the config for demo')
-    parser.add_argument('--data_path', type=str, default=data_path,
+    parser.add_argument('--data_path', type=str, default='demo_data',
                         help='specify the point cloud data file or directory')
-    parser.add_argument('--ckpt', type=str, default=ckpt, help='specify the pretrained model')
+    parser.add_argument('--ckpt', type=str, default='cfgs/ckpt/kitti/second_80.pth', help='specify the pretrained model')
     parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')
 
     args = parser.parse_args()
@@ -122,38 +80,24 @@ def main():
     args, cfg = parse_config()
     logger = common_utils.create_logger()
     logger.info('-----------------Quick Demo of OpenPCDet-------------------------')
-
-    #加载数据集
     demo_dataset = DemoDataset(
-        dataset_cfg=cfg.DATA_CONFIG, 
-        class_names=cfg.CLASS_NAMES, 
-        training=False,
-        root_path=Path(args.data_path),  logger=logger
+        dataset_cfg=cfg.DATA_CONFIG, class_names=cfg.CLASS_NAMES, training=False,
+        root_path=Path(args.data_path), ext=args.ext, logger=logger
     )
     logger.info(f'Total number of samples: \t{len(demo_dataset)}')
 
-    #加载模型
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=demo_dataset)
-    
-    #导入模型数据
-    model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=False)
+    model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
     model.cuda()
     model.eval()
-
-    #3D界面初始化
-    vis = open3d.visualization.Visualizer()
-    vis.create_window()
-    vis.get_render_option().point_size = 1.0
-    vis.get_render_option().background_color = np.zeros(3)
-
     with torch.no_grad():
         for idx, data_dict in enumerate(demo_dataset):
             logger.info(f'Visualized sample index: \t{idx + 1}')
             data_dict = demo_dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict)
             pred_dicts, _ = model.forward(data_dict)
-            
-            V.draw_scenes(vis,
+
+            V.draw_scenes(
                 points=data_dict['points'][:, 1:], ref_boxes=pred_dicts[0]['pred_boxes'],
                 ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels']
             )

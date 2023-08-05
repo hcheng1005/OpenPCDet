@@ -1,5 +1,4 @@
-CLASS_NAMES: ['car','truck', 'construction_vehicle', 'bus', 'trailer',
-              'barrier', 'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone']
+CLASS_NAMES: ['car','truck']
 
 DATA_CONFIG:
     _BASE_CONFIG_: cfgs/dataset_configs/nuscenes_dataset.yaml
@@ -15,14 +14,19 @@ DATA_CONFIG:
                 'test': True
             }
 
-        -   NAME: transform_points_to_voxels_placeholder
+        -   NAME: transform_points_to_voxels
             VOXEL_SIZE: [0.2, 0.2, 8.0]
+            MAX_POINTS_PER_VOXEL: 20
+            MAX_NUMBER_OF_VOXELS: {
+                'train': 30000,
+                'test': 30000
+            }
 
 MODEL:
     NAME: CenterPoint
 
     VFE:
-        NAME: DynPillarVFE
+        NAME: PillarVFE
         WITH_DISTANCE: False
         USE_ABSLOTE_XYZ: True
         USE_NORM: True
@@ -34,11 +38,11 @@ MODEL:
 
     BACKBONE_2D:
         NAME: BaseBEVBackbone
-        LAYER_NUMS: [3, 5, 5]
-        LAYER_STRIDES: [2, 2, 2]
-        NUM_FILTERS: [64, 128, 256]
-        UPSAMPLE_STRIDES: [0.5, 1, 2]
-        NUM_UPSAMPLE_FILTERS: [128, 128, 128]
+        LAYER_NUMS: [ 3, 5, 5 ]
+        LAYER_STRIDES: [ 1, 2, 2 ]
+        NUM_FILTERS: [ 64, 128, 256 ]
+        UPSAMPLE_STRIDES: [ 1, 2, 4 ]
+        NUM_UPSAMPLE_FILTERS: [ 128, 128, 128 ]
 
     DENSE_HEAD:
         NAME: CenterHead
@@ -46,11 +50,7 @@ MODEL:
 
         CLASS_NAMES_EACH_HEAD: [
             ['car'], 
-            ['truck', 'construction_vehicle'],
-            ['bus', 'trailer'],
-            ['barrier'],
-            ['motorcycle', 'bicycle'],
-            ['pedestrian', 'traffic_cone'],
+            ['truck']
         ]
 
         SHARED_CONV_CHANNEL: 64
@@ -67,7 +67,7 @@ MODEL:
             }
 
         TARGET_ASSIGNER_CONFIG:
-            FEATURE_MAP_STRIDE: 4
+            FEATURE_MAP_STRIDE: 1
             NUM_MAX_OBJS: 500
             GAUSSIAN_OVERLAP: 0.1
             MIN_RADIUS: 2
