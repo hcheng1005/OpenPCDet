@@ -1,4 +1,4 @@
-CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist']
+CLASS_NAMES: ['Car', 'Pedestrian']
 
 DATA_CONFIG: 
     _BASE_CONFIG_: cfgs/dataset_configs/kitti_dataset.yaml
@@ -101,16 +101,6 @@ MODEL:
                 'matched_threshold': 0.5,
                 'unmatched_threshold': 0.35
             },
-            {
-                'class_name': 'Cyclist',
-                'anchor_sizes': [[1.76, 0.6, 1.73]],
-                'anchor_rotations': [0, 1.57],
-                'anchor_bottom_heights': [-1.6],
-                'align_center': False,
-                'feature_map_stride': 8,
-                'matched_threshold': 0.5,
-                'unmatched_threshold': 0.35
-            }
         ]
 
         SHARED_CONV_NUM_FILTER: 64
@@ -122,9 +112,6 @@ MODEL:
             {
                 'HEAD_CLS_NAME': ['Pedestrian'],
             },
-            {
-                'HEAD_CLS_NAME': ['Cyclist'],
-            }
         ]
 
         TARGET_ASSIGNER_CONFIG:

@@ -180,7 +180,7 @@ def main():
       
       torch.onnx.export(model,       # model being run
           dummy_input,               # model input (or a tuple for multiple inputs)
-          "./pp.onnx",  # where to save the model (can be a file or file-like object)
+          "./nusc_multheadPP.onnx",  # where to save the model (can be a file or file-like object)
           export_params=True,        # store the trained parameter weights inside the model file
           opset_version=11,          # the ONNX version to export the model to
           do_constant_folding=False,  # whether to execute constant folding for optimization
@@ -189,20 +189,16 @@ def main():
           output_names = ['cls_preds', 'box_preds', 'dir_cls_preds'], # the model's output names
           )
 
-    onnx_raw = onnx.load("./pp.onnx")  # load onnx model
+    onnx_raw = onnx.load("./nusc_multheadPP.onnx")  # load onnx model
     onnx_simp, check = simplify(onnx_raw)
-    onnx.save(onnx_simp, "pp_simple.onnx")
+    onnx.save(onnx_simp, "nusc_multheadPP_simple.onnx")
 
-    onnx_raw = onnx.load("./pp_simple.onnx")  # load onnx model
+    onnx_raw = onnx.load("./nusc_multheadPP_simple.onnx")  # load onnx model
     onnx_trim_post = simplify_postprocess(onnx_raw)
-    onnx.save(onnx_trim_post, "pp_simple2.onnx")
+    onnx.save(onnx_trim_post, "nusc_multheadPP_simple2.onnx")
       
-    # onnx_simp, check = simplify(onnx_trim_post)
-    # onnx.save(onnx_simp, "pp_simple3.onnx")
-    # assert check, "Simplified ONNX model could not be validated"
-
     onnx_final = simplify_preprocess(onnx_trim_post)
-    onnx.save(onnx_final, "multpp_final.onnx")
+    onnx.save(onnx_final, "nusc_multheadPP_final.onnx")
     print('finished exporting onnx')
 
     logger.info('[PASS] ONNX EXPORTED.')

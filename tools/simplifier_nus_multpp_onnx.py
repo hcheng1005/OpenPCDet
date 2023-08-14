@@ -40,16 +40,23 @@ def simplify_postprocess(onnx_model):
   print("Use onnx_graphsurgeon to adjust postprocessing part in the onnx...")
   graph = gs.import_onnx(onnx_model)
 
-  output_01 = gs.Variable(name="1", dtype=np.float32)
-  output_02 = gs.Variable(name="2", dtype=np.float32)
-  output_03 = gs.Variable(name="3", dtype=np.float32)
-  output_04 = gs.Variable(name="4", dtype=np.float32)
-  output_05 = gs.Variable(name="5", dtype=np.float32)
-  output_06 = gs.Variable(name="6", dtype=np.float32)
+  output_01 = gs.Variable(name="11", dtype=np.float32)
+  output_02 = gs.Variable(name="12", dtype=np.float32)
+  output_03 = gs.Variable(name="13", dtype=np.float32)
+  output_04 = gs.Variable(name="14", dtype=np.float32)
+  output_05 = gs.Variable(name="15", dtype=np.float32)
+  output_06 = gs.Variable(name="16", dtype=np.float32)
+  output_011 = gs.Variable(name="21", dtype=np.float32)
+  output_021 = gs.Variable(name="22", dtype=np.float32)
+  output_031 = gs.Variable(name="23", dtype=np.float32)
+  output_041 = gs.Variable(name="24", dtype=np.float32)
+  output_051 = gs.Variable(name="25", dtype=np.float32)
+  output_061 = gs.Variable(name="26", dtype=np.float32)
 
   tmap = graph.tensors()
   new_inputs = [tmap["voxels"], tmap["voxel_idxs"], tmap["voxel_num"]]
-  new_outputs = [output_01, output_02, output_03,output_04, output_05, output_06]
+  new_outputs = [output_01, output_02, output_03,output_04, output_05, output_06,
+                 output_011, output_021, output_031,output_041, output_051, output_061]
 
   for inp in graph.inputs:
     if inp not in new_inputs:
@@ -58,13 +65,17 @@ def simplify_postprocess(onnx_model):
   for out in graph.outputs:
     out.inputs.clear()
 
+  #  找到链接ConvTranspose的node
   first_ConvTranspose_node = [node for node in graph.nodes if node.op == "ConvTranspose"][0] 
-
+  
+  # print('first_ConvTranspose_node', first_ConvTranspose_node)
+  # print('first_ConvTranspose_node', first_ConvTranspose_node.outputs[0])
+  
   current_node = first_ConvTranspose_node
   for i in range(3):
     # print('__________________________________________________________________')
     # print(current_node)
-    for node in graph.nodes:       
+    for node in graph.nodes: 
       if len(node.inputs) != 0 and len(current_node.outputs) != 0 :
         if node.op == "Concat":
             if node.inputs[1] == current_node.outputs[0]:
@@ -87,7 +98,7 @@ def simplify_postprocess(onnx_model):
   conv_node_after_concat = [node for node in graph.nodes if len(node.inputs) != 0 and len(concat_node.outputs) != 0 and node.inputs[0] == concat_node.outputs[0]][0]
   # print('conv_node_after_concat \n', conv_node_after_concat)
   
-  print(conv_node_after_concat.outputs)
+  # print(conv_node_after_concat.outputs)
   
   first_node_after_concat = [node for node in graph.nodes if len(node.inputs) != 0 and len(conv_node_after_concat.outputs) != 0 and node.inputs[0] == conv_node_after_concat.outputs[0]][0]
   # print('first_node_after_concat \n', first_node_after_concat)
@@ -99,9 +110,9 @@ def simplify_postprocess(onnx_model):
 
   for i in range(len(first_node_after_relu)):
     transpose_node = loop_node(graph, first_node_after_relu[i], 2)
-    # print('transpose_node \n', transpose_node)
+    print('transpose_node \n', transpose_node)
     assert transpose_node.op == "Conv"
-    transpose_node.outputs = [new_outputs[i]]
+    transpose_node.outputs = [new_outputs[i]] # 重新设定模型输出节点与位置
 
   graph.inputs = new_inputs
   graph.outputs = new_outputs
@@ -115,7 +126,7 @@ def simplify_preprocess(onnx_model):
   graph = gs.import_onnx(onnx_model)
 
   tmap = graph.tensors()
-  # print(tmap)
+  print(tmap)
   MAX_VOXELS = tmap["voxels"].shape[0]
 
   # voxels: [V, P, C']
@@ -158,7 +169,8 @@ def simplify_preprocess(onnx_model):
 
   #just keep some layers between inputs and outputs as below
   graph.inputs = [first_node_pillarvfe.inputs[0] , X, Y]
-  graph.outputs = [tmap["1"], tmap["2"], tmap["3"],tmap["4"], tmap["5"], tmap["6"]]
+  graph.outputs = [tmap["11"], tmap["12"], tmap["13"],tmap["14"], tmap["15"], tmap["16"],
+                   tmap["21"], tmap["22"], tmap["23"],tmap["24"], tmap["25"], tmap["26"]]
 
   graph.cleanup()
 

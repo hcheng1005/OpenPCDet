@@ -221,18 +221,32 @@ class Detector3DTemplate(nn.Module):
                 if not batch_dict['cls_preds_normalized']:
                     cls_preds = [torch.sigmoid(x) for x in cls_preds]
 
+            # 对于nuscenes的10classes，此处box_preds.shape =  torch.Size([327680, 9])
+            # print("----------box_preds---------- \n", box_preds.shape)
+            
+            # multi_class NMS
             if post_process_cfg.NMS_CONFIG.MULTI_CLASSES_NMS:
                 if not isinstance(cls_preds, list):
                     cls_preds = [cls_preds]
                     multihead_label_mapping = [torch.arange(1, self.num_class, device=cls_preds[0].device)]
                 else:
                     multihead_label_mapping = batch_dict['multihead_label_mapping']
-
+                
+                # print("----------cls_preds---------- \n", cls_preds)
+                # print("----------multihead_label_mapping---------- \n", multihead_label_mapping)
+                
                 cur_start_idx = 0
                 pred_scores, pred_labels, pred_boxes = [], [], []
                 for cur_cls_preds, cur_label_mapping in zip(cls_preds, multihead_label_mapping):
+                    
+                    # print("----------cur_cls_preds---------- \n", cur_cls_preds.shape)
+                    # print("----------cur_label_mapping---------- \n", cur_label_mapping)
+                    
+                    # 预测的目标类型个数与cfg文件是否一致
                     assert cur_cls_preds.shape[1] == len(cur_label_mapping)
+                    
                     cur_box_preds = box_preds[cur_start_idx: cur_start_idx + cur_cls_preds.shape[0]]
+                    
                     cur_pred_scores, cur_pred_labels, cur_pred_boxes = model_nms_utils.multi_classes_nms(
                         cls_scores=cur_cls_preds, box_preds=cur_box_preds,
                         nms_config=post_process_cfg.NMS_CONFIG,

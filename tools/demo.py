@@ -45,7 +45,7 @@ class DemoDataset(DatasetTemplate):
 
     def __getitem__(self, index):
         if self.ext == '.bin':
-            points = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 4)
+            points = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 5)
         elif self.ext == '.npy':
             points = np.load(self.sample_file_list[index])
         else:
@@ -61,12 +61,14 @@ class DemoDataset(DatasetTemplate):
 
 
 def parse_config():
+    data_path="/media/charles/ShareDisk/00myDataSet/nuScenes/v1.0-mini/sweeps/LIDAR_TOP/"
+    
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--cfg_file', type=str, default='cfgs/kitti_models/second.yaml',
+    parser.add_argument('--cfg_file', type=str, default='cfgs/nuscenes_models/cbgs_pp_multihead_demo.yaml',
                         help='specify the config for demo')
-    parser.add_argument('--data_path', type=str, default='demo_data',
+    parser.add_argument('--data_path', type=str, default=data_path,
                         help='specify the point cloud data file or directory')
-    parser.add_argument('--ckpt', type=str, default='cfgs/ckpt/kitti/second_80.pth', help='specify the pretrained model')
+    parser.add_argument('--ckpt', type=str, default='ckpt/nuScenes/pp_multihead_nds5823_updated.pth', help='specify the pretrained model')
     parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')
 
     args = parser.parse_args()
@@ -87,7 +89,10 @@ def main():
     logger.info(f'Total number of samples: \t{len(demo_dataset)}')
 
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=demo_dataset)
-    model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
+    # model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
+    
+    print(model)
+    
     model.cuda()
     model.eval()
     with torch.no_grad():
@@ -96,14 +101,16 @@ def main():
             data_dict = demo_dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict)
             pred_dicts, _ = model.forward(data_dict)
+        
+            print("pred_dicts \n", pred_dicts.shape)
 
-            V.draw_scenes(
-                points=data_dict['points'][:, 1:], ref_boxes=pred_dicts[0]['pred_boxes'],
-                ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels']
-            )
+            # V.draw_scenes(
+            #     points=data_dict['points'][:, 1:], ref_boxes=pred_dicts[0]['pred_boxes'],
+            #     ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels']
+            # )
 
-            if not OPEN3D_FLAG:
-                mlab.show(stop=True)
+            # if not OPEN3D_FLAG:
+            #     mlab.show(stop=True)
 
     logger.info('Demo done.')
 
