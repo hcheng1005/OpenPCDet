@@ -38,6 +38,7 @@ def multi_classes_nms(cls_scores, box_preds, nms_config, score_thresh=None):
     """
     pred_scores, pred_labels, pred_boxes = [], [], []
     
+    # print(cls_scores.shape, box_preds.shape)
     # 同类型做NMS
     for k in range(cls_scores.shape[1]):
         if score_thresh is not None: # 首先删除低score的box

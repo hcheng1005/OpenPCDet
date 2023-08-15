@@ -34,6 +34,7 @@ class PFNLayer(nn.Module):
                                for num_part in range(num_parts+1)]
             x = torch.cat(part_linear_out, dim=0)
         else:
+            print(inputs.shape)
             x = self.linear(inputs)
         torch.backends.cudnn.enabled = False
         x = self.norm(x.permute(0, 2, 1)).permute(0, 2, 1) if self.use_norm else x
@@ -63,10 +64,13 @@ class PillarVFE(VFETemplate):
         self.num_filters = self.model_cfg.NUM_FILTERS
         assert len(self.num_filters) > 0
         num_filters = [num_point_features] + list(self.num_filters)
+        
+        print("num_filters:", num_filters)
 
         pfn_layers = []
         for i in range(len(num_filters) - 1):
             in_filters = num_filters[i]
+            print("in_filters", in_filters)
             out_filters = num_filters[i + 1]
             pfn_layers.append(
                 PFNLayer(in_filters, out_filters, self.use_norm, last_layer=(i >= len(num_filters) - 2))

@@ -22,12 +22,40 @@ import numpy as np
 from pathlib import Path
 from onnxsim import simplify
 from pcdet.utils import common_utils
-from pcdet.models import build_network
+from pcdet.models import build_network, load_data_to_gpu
 from pcdet.datasets import DatasetTemplate
 from pcdet.config import cfg, cfg_from_yaml_file
 
-from exporter_paramters import export_paramters as export_paramters
-# from simplifier_onnx import simplify_preprocess, simplify_postprocess
+# from exporter_paramters import export_paramters as export_paramters
+from simplifier_nus_multpp_onnx import simplify_preprocess, simplify_postprocess
+
+import math
+
+from torch.onnx.symbolic_registry import register_op 
+ 
+
+def atan2_symbolic(g, self, other):
+    # self is y, and other is x on coordinate
+    slope = g.op("Div", self, other)
+    atan = g.op("Atan", slope)
+    const_zero = g.op("Constant", value_t=torch.tensor(0).to('cuda:0'))
+    const_pi = g.op("Constant", value_t=torch.tensor(math.pi).to('cuda:0'))
+
+    condition_second_or_third_quadrant = g.op("Greater", self, const_zero)
+    second_third_quadrant = g.op(
+        "Where",
+        condition_second_or_third_quadrant,
+        g.op("Add", atan, const_pi),
+        g.op("Sub", atan, const_pi),
+    )
+
+    condition_14_or_23_quadrant = g.op("Less", other, const_zero)
+    result = g.op("Where", condition_14_or_23_quadrant, second_third_quadrant, atan)
+
+    return result
+
+register_op('atan2', atan2_symbolic, '', 11)  
+
 
 class DemoDataset(DatasetTemplate):
     def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None, ext='.bin'):
@@ -67,14 +95,14 @@ class DemoDataset(DatasetTemplate):
 
         data_dict = self.prepare_data(data_dict=input_dict)
         return data_dict
-
-def parse_config():
+    
+def parse_config():    
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--cfg_file', type=str, default='cfgs/kitti_models/mult_pointpillar.yaml',
+    parser.add_argument('--cfg_file', type=str, default='cfgs/kitti_models/pointpillar_multhead.yaml',
                         help='specify the config for demo')
-    parser.add_argument('--data_path', type=str, default='demo_data',
+    parser.add_argument('--data_path', type=str, default="demo",
                         help='specify the point cloud data file or directory')
-    parser.add_argument('--ckpt', type=str, default='./pointpillar_7728.pth', help='specify the pretrained model')
+    parser.add_argument('--ckpt', type=str, default='ckpt/nuScenes/pp_multihead_nds5823_updated.pth', help='specify the pretrained model')
     parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')
 
     args = parser.parse_args()
@@ -95,9 +123,13 @@ def main():
 
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=demo_dataset)
     # model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
+    # model.to('cpu')
     model.cuda()
     model.eval()
+    
+    # 
     print(model)
+    
     np.set_printoptions(threshold=np.inf)
     with torch.no_grad():
 
@@ -123,29 +155,29 @@ def main():
       dummy_input['voxel_num_points'] = dummy_voxel_num
       dummy_input['voxel_coords'] = dummy_voxel_idxs
       dummy_input['batch_size'] = 1
-
+      
       torch.onnx.export(model,       # model being run
           dummy_input,               # model input (or a tuple for multiple inputs)
-          "./pointpillar_mult_head_raw.onnx",  # where to save the model (can be a file or file-like object)
+          "./kitti_multheadPP.onnx",  # where to save the model (can be a file or file-like object)
           export_params=True,        # store the trained parameter weights inside the model file
           opset_version=11,          # the ONNX version to export the model to
-          do_constant_folding=True,  # whether to execute constant folding for optimization
+          do_constant_folding=False,  # whether to execute constant folding for optimization
           keep_initializers_as_inputs=True,
           input_names = ['voxels', 'voxel_num', 'voxel_idxs'],   # the model's input names
           output_names = ['cls_preds', 'box_preds', 'dir_cls_preds'], # the model's output names
           )
 
-    #   onnx_raw = onnx.load("./pointpillar_raw.onnx")  # load onnx model
-    #   onnx_trim_post = simplify_postprocess(onnx_raw)
-    #   onnx.save(onnx_trim_post, "pointpillar_simple1.onnx")
-      
-    #   onnx_simp, check = simplify(onnx_trim_post)
-    #   onnx.save(onnx_simp, "pointpillar_simple2.onnx")
-    #   assert check, "Simplified ONNX model could not be validated"
+    onnx_raw = onnx.load("./kitti_multheadPP.onnx")  # load onnx model
+    onnx_simp, check = simplify(onnx_raw)
+    onnx.save(onnx_simp, "kitti_multheadPP_simple.onnx")
 
-    #   onnx_final = simplify_preprocess(onnx_simp)
-    #   onnx.save(onnx_final, "pointpillar.onnx")
-    #   print('finished exporting onnx')
+    onnx_raw = onnx.load("./kitti_multheadPP_simple.onnx")  # load onnx model
+    onnx_trim_post = simplify_postprocess(onnx_raw)
+    onnx.save(onnx_trim_post, "kitti_multheadPP_simple2.onnx")
+      
+    onnx_final = simplify_preprocess(onnx_trim_post)
+    onnx.save(onnx_final, "kitti_multheadPP_final.onnx")
+    print('finished exporting onnx')
 
     logger.info('[PASS] ONNX EXPORTED.')
 

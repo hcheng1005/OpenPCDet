@@ -110,7 +110,7 @@ def simplify_postprocess(onnx_model):
 
   for i in range(len(first_node_after_relu)):
     transpose_node = loop_node(graph, first_node_after_relu[i], 2)
-    print('transpose_node \n', transpose_node)
+    # print('transpose_node \n', transpose_node)
     assert transpose_node.op == "Conv"
     transpose_node.outputs = [new_outputs[i]] # 重新设定模型输出节点与位置
 
@@ -126,7 +126,7 @@ def simplify_preprocess(onnx_model):
   graph = gs.import_onnx(onnx_model)
 
   tmap = graph.tensors()
-  print(tmap)
+  # print(tmap)
   MAX_VOXELS = tmap["voxels"].shape[0]
 
   # voxels: [V, P, C']

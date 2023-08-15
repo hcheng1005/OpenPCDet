@@ -204,6 +204,8 @@ class Detector3DTemplate(nn.Module):
                 assert batch_dict['batch_box_preds'].shape.__len__() == 3
                 batch_mask = index
 
+            # print("batch_dict", batch_dict['batch_box_preds'].shape)
+            
             box_preds = batch_dict['batch_box_preds'][batch_mask]
             src_box_preds = box_preds
             
