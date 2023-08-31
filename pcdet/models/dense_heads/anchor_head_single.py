@@ -47,20 +47,22 @@ class AnchorHeadSingle(AnchorHeadTemplate):
         cls_preds = cls_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C]
         box_preds = box_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C]
 
+        # 模型预测输出：类型与回归框
         self.forward_ret_dict['cls_preds'] = cls_preds
         self.forward_ret_dict['box_preds'] = box_preds
 
         if self.conv_dir_cls is not None:
+            
+            # 模型预测输出：方向类别 
             dir_cls_preds = self.conv_dir_cls(spatial_features_2d)
             dir_cls_preds = dir_cls_preds.permute(0, 2, 3, 1).contiguous()
             self.forward_ret_dict['dir_cls_preds'] = dir_cls_preds
         else:
             dir_cls_preds = None
 
+        # 在训练阶段，与gt_box进行分配
         if self.training:
-            targets_dict = self.assign_targets(
-                gt_boxes=data_dict['gt_boxes']
-            )
+            targets_dict = self.assign_targets(gt_boxes=data_dict['gt_boxes'])
             self.forward_ret_dict.update(targets_dict)
 
         if not self.training or self.predict_boxes_when_training:

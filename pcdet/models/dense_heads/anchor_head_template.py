@@ -36,6 +36,13 @@ class AnchorHeadTemplate(nn.Module):
 
     @staticmethod
     def generate_anchors(anchor_generator_cfg, grid_size, point_cloud_range, anchor_ndim=7):
+        """
+        Args:
+            anchor_generator_cfg:   每个类别的anchor配置
+            grid_size:              网格大小 [432, 496, 1]
+            point_cloud_range:      点云范围 [  0.   -39.68  -3.    69.12  39.68   1.  ]
+            anchor_ndim:            anchor维度: 7 位置 + 大小 + 方向 [x,y,z,dx,dy,dz,rot]
+        """
         anchor_generator = AnchorGenerator(
             anchor_range=point_cloud_range,
             anchor_generator_config=anchor_generator_cfg
@@ -93,18 +100,20 @@ class AnchorHeadTemplate(nn.Module):
         Returns:
 
         """
+        
+        # 预设的anchor与gt_boxes分配关联
         targets_dict = self.target_assigner.assign_targets(
             self.anchors, gt_boxes
         )
         return targets_dict
 
     def get_cls_layer_loss(self):
-        cls_preds = self.forward_ret_dict['cls_preds']
-        box_cls_labels = self.forward_ret_dict['box_cls_labels']
+        cls_preds = self.forward_ret_dict['cls_preds'] # 本次预测类别
+        box_cls_labels = self.forward_ret_dict['box_cls_labels'] # 前景anchor类别
         batch_size = int(cls_preds.shape[0])
         cared = box_cls_labels >= 0  # [N, num_anchors]
-        positives = box_cls_labels > 0
-        negatives = box_cls_labels == 0
+        positives = box_cls_labels > 0 # 前景anchor
+        negatives = box_cls_labels == 0 # 背景anchor
         negative_cls_weights = negatives * 1.0
         cls_weights = (negative_cls_weights + 1.0 * positives).float()
         reg_weights = positives.float()
@@ -214,8 +223,12 @@ class AnchorHeadTemplate(nn.Module):
         return box_loss, tb_dict
 
     def get_loss(self):
+        # 类别损失
         cls_loss, tb_dict = self.get_cls_layer_loss()
+        
+        # 回归框损失
         box_loss, tb_dict_box = self.get_box_reg_layer_loss()
+        
         tb_dict.update(tb_dict_box)
         rpn_loss = cls_loss + box_loss
 
@@ -243,12 +256,16 @@ class AnchorHeadTemplate(nn.Module):
                 anchors = torch.cat(self.anchors, dim=-3)
         else:
             anchors = self.anchors
+            
         num_anchors = anchors.view(-1, anchors.shape[-1]).shape[0]
         batch_anchors = anchors.view(1, -1, anchors.shape[-1]).repeat(batch_size, 1, 1)
+        
         batch_cls_preds = cls_preds.view(batch_size, num_anchors, -1).float() \
             if not isinstance(cls_preds, list) else cls_preds
+            
         batch_box_preds = box_preds.view(batch_size, num_anchors, -1) if not isinstance(box_preds, list) \
             else torch.cat(box_preds, dim=1).view(batch_size, num_anchors, -1)
+            
         batch_box_preds = self.box_coder.decode_torch(batch_box_preds, batch_anchors)
 
         if dir_cls_preds is not None:

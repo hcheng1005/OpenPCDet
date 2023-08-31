@@ -105,8 +105,8 @@ class TransFusionHead(nn.Module):
         # transformer decoder layers for object query with LiDAR feature
         self.decoder = TransformerDecoderLayer(hidden_channel, num_heads, ffn_channel, dropout, activation,
                 self_posembed=PositionEmbeddingLearned(2, hidden_channel),
-                cross_posembed=PositionEmbeddingLearned(2, hidden_channel),
-            )
+                cross_posembed=PositionEmbeddingLearned(2, hidden_channel))
+        
         # Prediction Head
         heads = copy.deepcopy(self.model_cfg.SEPARATE_HEAD_CFG.HEAD_DICT)
         heads['heatmap'] = dict(out_channels=self.num_classes, num_conv=self.model_cfg.NUM_HM_CONV)

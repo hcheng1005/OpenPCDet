@@ -57,42 +57,26 @@ class DemoDataset(DatasetTemplate):
     def __len__(self):
         return len(self.sample_file_list)
 
-    # def __getitem__(self, index):
-    #     points = np.fromfile(
-    #         self.sample_file_list[index], dtype=np.float32, count=-1).reshape([-1, 5])[:, :4]
-
-    #     sweep_points_list = [points]
-    #     sweep_times_list = [np.zeros((points.shape[0], 1))]
-
-    #     points = np.concatenate(sweep_points_list, axis=0)
-    #     times = np.concatenate(sweep_times_list, axis=0).astype(points.dtype)
-
-    #     points = np.concatenate((points, times), axis=1)
-
-    #     input_dict = {
-    #         'points': points,
-    #         'frame_id': times,
-    #     }
-
-    #     data_dict = self.prepare_data(data_dict=input_dict)
-    #     return data_dict
-    
-    # for folder
     def __getitem__(self, index):
-        if self.ext == '.bin':
-            points = np.fromfile(self.sample_file_list[index], dtype=np.float32).reshape(-1, 4)
-        elif self.ext == '.npy':
-            points = np.load(self.sample_file_list[index])
-        else:
-            raise NotImplementedError
+        points = np.fromfile(
+            self.sample_file_list[index], dtype=np.float32, count=-1).reshape([-1, 5])[:, :4]
+
+        sweep_points_list = [points]
+        sweep_times_list = [np.zeros((points.shape[0], 1))]
+
+        points = np.concatenate(sweep_points_list, axis=0)
+        times = np.concatenate(sweep_times_list, axis=0).astype(points.dtype)
+
+        points = np.concatenate((points, times), axis=1)
 
         input_dict = {
             'points': points,
-            'frame_id': index,
+            'frame_id': times,
         }
 
         data_dict = self.prepare_data(data_dict=input_dict)
         return data_dict
+    
     
     def gen_data_dict(self, file_path):
         points = np.fromfile(file_path, dtype=np.float32, count=-1).reshape([-1, 5])[:, :4]
@@ -114,16 +98,9 @@ class DemoDataset(DatasetTemplate):
 
 
 def parse_config():
-    # cfg_file = "cfgs/nuscenes_models/cbgs_voxel01_res3d_centerpoint.yaml"
-    # ckpt = "cfgs/ckpt/nuScenes/cbgs_voxel01_centerpoint_nds_6454.pth"
-
-    cfg_file = "cfgs/nuscenes_models/cbgs_pp_multihead.yaml"
-    ckpt = "cfgs/ckpt/nuScenes/pp_multihead_nds5823_updated.pth"
-    # data_path = "/media/charles/ShareDisk/00myDataSet/nuScenes/v1.0-trainval/sweeps/LIDAR_TOP/"
-    
-    # cfg_file="cfgs/nuscenes_models/cbgs_voxel01_res3d_centerpoint.yaml"
-    # ckpt="cfgs/ckpt/nuScenes/cbgs_voxel01_centerpoint_nds_6454.pth"
     data_path="/media/charles/ShareDisk/00myDataSet/nuScenes/v1.0-mini/sweeps/LIDAR_TOP/"
+    cfg_file = "cfgs/nuscenes_models/cbgs_pp_multihead.yaml"
+    ckpt = "ckpt/nuScenes/pp_multihead_nds5823_updated.pth"
     
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--cfg_file', type=str, default=cfg_file,
@@ -189,8 +166,7 @@ def main():
         cfg.CLASS_NAMES), dataset=demo_dataset)
 
     # 导入模型数据
-    model.load_params_from_file(
-        filename=args.ckpt, logger=logger, to_cpu=False)
+    model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=False)
     model.cuda()
     model.eval()
 
@@ -207,7 +183,8 @@ def main():
     tracker = MOTModel(configs)
     
     nusc = NuScenes(version='v1.0-mini',
-                dataroot='/media/charles/ShareDisk/00myDataSet/nuScenes/v1.0-mini/', verbose=True)
+                    dataroot='/media/charles/ShareDisk/00myDataSet/nuScenes/v1.0-mini/', 
+                    verbose=True)
 
     with torch.no_grad():
         

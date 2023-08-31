@@ -230,6 +230,12 @@ class CenterHead(nn.Module):
         y = torch.clamp(x.sigmoid(), min=1e-4, max=1 - 1e-4)
         return y
 
+    '''
+    names: 计算损失
+    description: Briefly describe the function of your function
+    param {*} self
+    return {*}
+    '''
     def get_loss(self):
         pred_dicts = self.forward_ret_dict['pred_dicts']
         target_dicts = self.forward_ret_dict['target_dicts']
@@ -237,12 +243,13 @@ class CenterHead(nn.Module):
         tb_dict = {}
         loss = 0
 
+        # 遍历所有预测出来的目标
         for idx, pred_dict in enumerate(pred_dicts):
-            pred_dict['hm'] = self.sigmoid(pred_dict['hm'])
-            hm_loss = self.hm_loss_func(pred_dict['hm'], target_dicts['heatmaps'][idx])
-            hm_loss *= self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS['cls_weight']
+            pred_dict['hm'] = self.sigmoid(pred_dict['hm'])  #热力图
+            hm_loss = self.hm_loss_func(pred_dict['hm'], target_dicts['heatmaps'][idx]) #热力图损失（中心点损失）
+            hm_loss *= self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS['cls_weight'] 
 
-            target_boxes = target_dicts['target_boxes'][idx]
+            target_boxes = target_dicts['target_boxes'][idx] # 真值box
             pred_boxes = torch.cat([pred_dict[head_name] for head_name in self.separate_head_cfg.HEAD_ORDER], dim=1)
 
             reg_loss = self.reg_loss_func(
@@ -294,6 +301,14 @@ class CenterHead(nn.Module):
         tb_dict['rpn_loss'] = loss.item()
         return loss, tb_dict
 
+    '''
+    names: centerpoint模型解码生成bbox
+    description: Briefly describe the function of your function
+    param {*} self
+    param {*} batch_size
+    param {*} pred_dicts
+    return {*}
+    '''
     def generate_predicted_boxes(self, batch_size, pred_dicts):
         post_process_cfg = self.model_cfg.POST_PROCESSING
         post_center_limit_range = torch.tensor(post_process_cfg.POST_CENTER_LIMIT_RANGE).cuda().float()
@@ -303,6 +318,7 @@ class CenterHead(nn.Module):
             'pred_scores': [],
             'pred_labels': [],
         } for k in range(batch_size)]
+        
         for idx, pred_dict in enumerate(pred_dicts):
             batch_hm = pred_dict['hm'].sigmoid()
             batch_center = pred_dict['center']
@@ -400,9 +416,8 @@ class CenterHead(nn.Module):
         self.forward_ret_dict['pred_dicts'] = pred_dicts
 
         if not self.training or self.predict_boxes_when_training:
-            pred_dicts = self.generate_predicted_boxes(
-                data_dict['batch_size'], pred_dicts
-            )
+            # 解码，生成最后的bbox  
+            pred_dicts = self.generate_predicted_boxes(data_dict['batch_size'], pred_dicts)
 
             if self.predict_boxes_when_training:
                 rois, roi_scores, roi_labels = self.reorder_rois_for_refining(data_dict['batch_size'], pred_dicts)

@@ -7,7 +7,6 @@ class PointPillar(Detector3DTemplate):
         self.module_list = self.build_networks()
 
     def forward(self, batch_dict):
-        
         # 模型推理
         for cur_module in self.module_list:
             batch_dict = cur_module(batch_dict)
@@ -19,7 +18,8 @@ class PointPillar(Detector3DTemplate):
                 'loss': loss
             }
             return ret_dict, tb_dict, disp_dict
-        else: # 检测后处理
+        else:
+            # 检测后处理
             pred_dicts, recall_dicts = self.post_processing(batch_dict)
             return pred_dicts, recall_dicts
 

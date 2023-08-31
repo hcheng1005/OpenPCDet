@@ -98,7 +98,7 @@ class DemoDataset(DatasetTemplate):
     
 def parse_config():    
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--cfg_file', type=str, default='cfgs/kitti_models/pointpillar_multhead.yaml',
+    parser.add_argument('--cfg_file', type=str, default='cfgs/kitti_models/pointpillar.yaml',
                         help='specify the config for demo')
     parser.add_argument('--data_path', type=str, default="demo",
                         help='specify the point cloud data file or directory')
@@ -130,56 +130,56 @@ def main():
     # 
     print(model)
     
-    np.set_printoptions(threshold=np.inf)
-    with torch.no_grad():
+    # np.set_printoptions(threshold=np.inf)
+    # with torch.no_grad():
 
-      MAX_VOXELS = 10000
+    #   MAX_VOXELS = 10000
 
-      dummy_voxels = torch.zeros(
-          (MAX_VOXELS, 32, 4),
-          dtype=torch.float32,
-          device='cuda:0')
+    #   dummy_voxels = torch.zeros(
+    #       (MAX_VOXELS, 32, 4),
+    #       dtype=torch.float32,
+    #       device='cuda:0')
 
-      dummy_voxel_idxs = torch.zeros(
-          (MAX_VOXELS, 4),
-          dtype=torch.int32,
-          device='cuda:0')
+    #   dummy_voxel_idxs = torch.zeros(
+    #       (MAX_VOXELS, 4),
+    #       dtype=torch.int32,
+    #       device='cuda:0')
 
-      dummy_voxel_num = torch.zeros(
-          (1),
-          dtype=torch.int32,
-          device='cuda:0')
+    #   dummy_voxel_num = torch.zeros(
+    #       (1),
+    #       dtype=torch.int32,
+    #       device='cuda:0')
 
-      dummy_input = dict()
-      dummy_input['voxels'] = dummy_voxels
-      dummy_input['voxel_num_points'] = dummy_voxel_num
-      dummy_input['voxel_coords'] = dummy_voxel_idxs
-      dummy_input['batch_size'] = 1
+    #   dummy_input = dict()
+    #   dummy_input['voxels'] = dummy_voxels
+    #   dummy_input['voxel_num_points'] = dummy_voxel_num
+    #   dummy_input['voxel_coords'] = dummy_voxel_idxs
+    #   dummy_input['batch_size'] = 1
       
-      torch.onnx.export(model,       # model being run
-          dummy_input,               # model input (or a tuple for multiple inputs)
-          "./kitti_multheadPP.onnx",  # where to save the model (can be a file or file-like object)
-          export_params=True,        # store the trained parameter weights inside the model file
-          opset_version=11,          # the ONNX version to export the model to
-          do_constant_folding=False,  # whether to execute constant folding for optimization
-          keep_initializers_as_inputs=True,
-          input_names = ['voxels', 'voxel_num', 'voxel_idxs'],   # the model's input names
-          output_names = ['cls_preds', 'box_preds', 'dir_cls_preds'], # the model's output names
-          )
+    #   torch.onnx.export(model,       # model being run
+    #       dummy_input,               # model input (or a tuple for multiple inputs)
+    #       "./kitti_multheadPP.onnx",  # where to save the model (can be a file or file-like object)
+    #       export_params=True,        # store the trained parameter weights inside the model file
+    #       opset_version=11,          # the ONNX version to export the model to
+    #       do_constant_folding=False,  # whether to execute constant folding for optimization
+    #       keep_initializers_as_inputs=True,
+    #       input_names = ['voxels', 'voxel_num', 'voxel_idxs'],   # the model's input names
+    #       output_names = ['cls_preds', 'box_preds', 'dir_cls_preds'], # the model's output names
+    #       )
 
-    onnx_raw = onnx.load("./kitti_multheadPP.onnx")  # load onnx model
-    onnx_simp, check = simplify(onnx_raw)
-    onnx.save(onnx_simp, "kitti_multheadPP_simple.onnx")
+    # onnx_raw = onnx.load("./kitti_multheadPP.onnx")  # load onnx model
+    # onnx_simp, check = simplify(onnx_raw)
+    # onnx.save(onnx_simp, "kitti_multheadPP_simple.onnx")
 
-    onnx_raw = onnx.load("./kitti_multheadPP_simple.onnx")  # load onnx model
-    onnx_trim_post = simplify_postprocess(onnx_raw)
-    onnx.save(onnx_trim_post, "kitti_multheadPP_simple2.onnx")
+    # onnx_raw = onnx.load("./kitti_multheadPP_simple.onnx")  # load onnx model
+    # onnx_trim_post = simplify_postprocess(onnx_raw)
+    # onnx.save(onnx_trim_post, "kitti_multheadPP_simple2.onnx")
       
-    onnx_final = simplify_preprocess(onnx_trim_post)
-    onnx.save(onnx_final, "kitti_multheadPP_final.onnx")
-    print('finished exporting onnx')
+    # onnx_final = simplify_preprocess(onnx_trim_post)
+    # onnx.save(onnx_final, "kitti_multheadPP_final.onnx")
+    # print('finished exporting onnx')
 
-    logger.info('[PASS] ONNX EXPORTED.')
+    # logger.info('[PASS] ONNX EXPORTED.')
 
 if __name__ == '__main__':
     main()

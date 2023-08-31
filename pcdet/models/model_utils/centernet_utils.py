@@ -170,6 +170,11 @@ def _topk(scores, K=40):
     return topk_score, topk_inds, topk_classes, topk_ys, topk_xs
 
 
+'''
+names: decode_bbox_from_heatmap
+description: Briefly describe the function of your function
+return {*}
+'''
 def decode_bbox_from_heatmap(heatmap, rot_cos, rot_sin, center, center_z, dim,
                              point_cloud_range=None, voxel_size=None, feature_map_stride=None, vel=None, iou=None, K=100,
                              circle_nms=False, score_thresh=None, post_center_limit_range=None):

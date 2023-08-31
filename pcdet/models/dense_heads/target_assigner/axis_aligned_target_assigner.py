@@ -191,6 +191,8 @@ class AxisAlignedTargetAssigner(object):
         if len(gt_boxes) > 0 and anchors.shape[0] > 0:
             fg_gt_boxes = gt_boxes[anchor_to_gt_argmax[fg_inds], :]
             fg_anchors = anchors[fg_inds, :]
+            
+            # 通过gt_boxes和anchor生成bbox
             bbox_targets[fg_inds, :] = self.box_coder.encode_torch(fg_gt_boxes, fg_anchors)
 
         reg_weights = anchors.new_zeros((num_anchors,))
