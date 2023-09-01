@@ -52,7 +52,6 @@ class AnchorHeadSingle(AnchorHeadTemplate):
         self.forward_ret_dict['box_preds'] = box_preds
 
         if self.conv_dir_cls is not None:
-            
             # 模型预测输出：方向类别 
             dir_cls_preds = self.conv_dir_cls(spatial_features_2d)
             dir_cls_preds = dir_cls_preds.permute(0, 2, 3, 1).contiguous()
@@ -65,6 +64,7 @@ class AnchorHeadSingle(AnchorHeadTemplate):
             targets_dict = self.assign_targets(gt_boxes=data_dict['gt_boxes'])
             self.forward_ret_dict.update(targets_dict)
 
+        # 预测阶段，进行box解码
         if not self.training or self.predict_boxes_when_training:
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
                 batch_size=data_dict['batch_size'],

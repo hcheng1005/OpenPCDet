@@ -11,7 +11,8 @@ class PointPillar(Detector3DTemplate):
         for cur_module in self.module_list:
             batch_dict = cur_module(batch_dict)
 
-        if self.training: # 训练模式下计算loss进行反向传播
+        # 训练模式下计算loss进行反向传播
+        if self.training: 
             loss, tb_dict, disp_dict = self.get_training_loss()
 
             ret_dict = {

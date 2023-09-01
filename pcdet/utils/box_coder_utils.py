@@ -42,6 +42,14 @@ class ResidualCoder(object):
         cts = [g - a for g, a in zip(cgs, cas)]
         return torch.cat([xt, yt, zt, dxt, dyt, dzt, *rts, *cts], dim=-1)
 
+    '''
+    names: decode_torch
+    description: 基于anchor与预测的box_encoding进行目标框解码
+    param {*} self
+    param {*} box_encodings
+    param {*} anchors
+    return {*}
+    '''
     def decode_torch(self, box_encodings, anchors):
         """
         Args:
@@ -57,22 +65,27 @@ class ResidualCoder(object):
         else:
             xt, yt, zt, dxt, dyt, dzt, cost, sint, *cts = torch.split(box_encodings, 1, dim=-1)
 
-        diagonal = torch.sqrt(dxa ** 2 + dya ** 2)
+        # 对角线长度
+        diagonal = torch.sqrt(dxa ** 2 + dya ** 2) 
+        
+        # box位置解码
         xg = xt * diagonal + xa
         yg = yt * diagonal + ya
         zg = zt * dza + za
 
+        # box形状解码
         dxg = torch.exp(dxt) * dxa
         dyg = torch.exp(dyt) * dya
         dzg = torch.exp(dzt) * dza
 
+        # box朝向解码
         if self.encode_angle_by_sincos:
             rg_cos = cost + torch.cos(ra)
             rg_sin = sint + torch.sin(ra)
             rg = torch.atan2(rg_sin, rg_cos)
         else:
-            rg = rt + ra
-
+            rg = rt + ra # using sincos
+        
         cgs = [t + a for t, a in zip(cts, cas)]
         return torch.cat([xg, yg, zg, dxg, dyg, dzg, rg, *cgs], dim=-1)
 

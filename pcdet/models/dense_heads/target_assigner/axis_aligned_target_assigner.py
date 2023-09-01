@@ -47,10 +47,12 @@ class AxisAlignedTargetAssigner(object):
         reg_weights = []
 
         batch_size = gt_boxes_with_classes.shape[0]
+        
+        # gt类型与gt框
         gt_classes = gt_boxes_with_classes[:, :, -1]
         gt_boxes = gt_boxes_with_classes[:, :, :-1]
         for k in range(batch_size):
-            cur_gt = gt_boxes[k]
+            cur_gt = gt_boxes[k] # 该batch下的所有gt框
             cnt = cur_gt.__len__() - 1
             while cnt > 0 and cur_gt[cnt].sum() == 0:
                 cnt -= 1
@@ -80,6 +82,7 @@ class AxisAlignedTargetAssigner(object):
                     anchors = anchors.view(-1, anchors.shape[-1])
                     selected_classes = cur_gt_classes[mask]
 
+                # gt框与anchor分配（注意：这里是否有anchor进行分配，而不是预测框）
                 single_target = self.assign_targets_single(
                     anchors,
                     cur_gt[mask],
@@ -129,6 +132,17 @@ class AxisAlignedTargetAssigner(object):
         }
         return all_targets_dict
 
+    '''
+    names: assign_targets_single
+    description: gt框与anchor分配（注意：这里是否有anchor进行分配，而不是预测框）
+    param {*} self
+    param {*} anchors
+    param {*} gt_boxes
+    param {*} gt_classes
+    param {*} matched_threshold
+    param {*} unmatched_threshold
+    return {*}
+    '''
     def assign_targets_single(self, anchors, gt_boxes, gt_classes, matched_threshold=0.6, unmatched_threshold=0.45):
 
         num_anchors = anchors.shape[0]
@@ -138,6 +152,8 @@ class AxisAlignedTargetAssigner(object):
         gt_ids = torch.ones((num_anchors,), dtype=torch.int32, device=anchors.device) * -1
 
         if len(gt_boxes) > 0 and anchors.shape[0] > 0:
+            
+            # step1：计算IOU(根据配置不同选择2D-IOU or 3D-IOU)
             anchor_by_gt_overlap = iou3d_nms_utils.boxes_iou3d_gpu(anchors[:, 0:7], gt_boxes[:, 0:7]) \
                 if self.match_height else box_utils.boxes3d_nearest_bev_iou(anchors[:, 0:7], gt_boxes[:, 0:7])
 
@@ -192,7 +208,9 @@ class AxisAlignedTargetAssigner(object):
             fg_gt_boxes = gt_boxes[anchor_to_gt_argmax[fg_inds], :]
             fg_anchors = anchors[fg_inds, :]
             
-            # 通过gt_boxes和anchor生成bbox
+            # NOTE: 通过gt_boxes和anchor生成gt-bbox，后续再与预测框之间做loss
+            # 也就是在这个时候将gt框和预测框联系在了一起
+            # 另外，此处bbox_targets的非fg_inds索引的数值全为0，起到一个mask的作用
             bbox_targets[fg_inds, :] = self.box_coder.encode_torch(fg_gt_boxes, fg_anchors)
 
         reg_weights = anchors.new_zeros((num_anchors,))

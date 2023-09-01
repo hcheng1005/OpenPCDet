@@ -222,10 +222,15 @@ class AnchorHeadTemplate(nn.Module):
 
         return box_loss, tb_dict
 
+    '''
+    names: get_loss
+    description: 计算loss
+    param {*} self
+    return {*}
+    '''
     def get_loss(self):
         # 类别损失
         cls_loss, tb_dict = self.get_cls_layer_loss()
-        
         # 回归框损失
         box_loss, tb_dict_box = self.get_box_reg_layer_loss()
         
@@ -235,6 +240,16 @@ class AnchorHeadTemplate(nn.Module):
         tb_dict['rpn_loss'] = rpn_loss.item()
         return rpn_loss, tb_dict
 
+    '''
+    names: 生成目标框
+    description: Briefly describe the function of your function
+    param {*} self
+    param {*} batch_size
+    param {*} cls_preds
+    param {*} box_preds
+    param {*} dir_cls_preds
+    return {*}
+    '''
     def generate_predicted_boxes(self, batch_size, cls_preds, box_preds, dir_cls_preds=None):
         """
         Args:
