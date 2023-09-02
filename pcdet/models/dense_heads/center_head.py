@@ -46,6 +46,11 @@ class SeparateHead(nn.Module):
         return ret_dict
 
 
+'''
+names: CenterHead
+description: Briefly describe the function of your function
+return {*}
+'''
 class CenterHead(nn.Module):
     def __init__(self, model_cfg, input_channels, num_class, class_names, grid_size, point_cloud_range, voxel_size,
                  predict_boxes_when_training=True):
@@ -103,6 +108,11 @@ class CenterHead(nn.Module):
         self.add_module('hm_loss_func', loss_utils.FocalLossCenterNet())
         self.add_module('reg_loss_func', loss_utils.RegLossCenterNet())
 
+    '''
+    names: assign_target_of_single_head
+    description: centerhead中的gt框与预测框的分配算法逻辑
+    return {*}
+    '''
     def assign_target_of_single_head(
             self, num_classes, gt_boxes, feature_map_size, feature_map_stride, num_max_objs=500,
             gaussian_overlap=0.1, min_radius=2
@@ -405,7 +415,8 @@ class CenterHead(nn.Module):
         pred_dicts = []
         for head in self.heads_list:
             pred_dicts.append(head(x))
-
+        
+        #  训练模式下开始分配gt与预测框
         if self.training:
             target_dict = self.assign_targets(
                 data_dict['gt_boxes'], feature_map_size=spatial_features_2d.size()[2:],

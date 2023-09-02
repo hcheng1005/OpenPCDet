@@ -6,6 +6,14 @@ import numpy as np
 import numba
 
 
+'''
+names: gaussian_radius
+description: 计算高斯半径
+param {*} height
+param {*} width
+param {*} min_overlap
+return {*}
+'''
 def gaussian_radius(height, width, min_overlap=0.5):
     """
     Args:
