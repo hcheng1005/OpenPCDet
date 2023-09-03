@@ -63,8 +63,8 @@ class DemoDataset(DatasetTemplate):
 
 def parse_config():
     data_path="/media/charles/ShareDisk/00myDataSet/KITTI/archive/training/velodyne"
-    cfg_ = 'cfgs/kitti_models/pointpillar.yaml'
-    ckpt_ = 'ckpt/kitti/pointpillar_7728.pth'
+    cfg_ = '../output/cfgs/kitti_models/centerpoint/centerpoint.yaml'
+    ckpt_ = '../output/cfgs/kitti_models/centerpoint/checkpoint_epoch_40.pth'
     # cfg_ = 'cfgs/kitti_models/centerpoint.yaml'
     # ckpt_ = 'ckpt/kitti/checkpoint_epoch_66.pth'
     
@@ -111,8 +111,13 @@ def main():
             logger.info(f'Visualized sample index: \t{idx + 1}')
             data_dict = demo_dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict)
+            
+            start_time = time.time()
             pred_dicts, _ = model.forward(data_dict)
-        
+            end_time = time.time()
+
+            print("计算时间：{}".format(end_time - start_time))
+            
             # print("pred_boxes \n", pred_dicts[0]['pred_boxes'])
             # print("pred_scores \n", pred_dicts[0]['pred_scores'])
 
