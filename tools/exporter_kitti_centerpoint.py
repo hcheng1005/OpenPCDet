@@ -18,6 +18,7 @@ import onnx
 import torch
 import argparse
 import numpy as np
+import onnxruntime
 
 from pathlib import Path
 from onnxsim import simplify
@@ -25,6 +26,8 @@ from pcdet.utils import common_utils
 from pcdet.models import build_network, load_data_to_gpu
 from pcdet.datasets import DatasetTemplate
 from pcdet.config import cfg, cfg_from_yaml_file
+
+from pcdet.models.backbones_3d import VoxelBackBone8x
 
 # from exporter_paramters import export_paramters as export_paramters
 from simplifier_nus_multpp_onnx import simplify_preprocess, simplify_postprocess
@@ -115,11 +118,11 @@ def parse_config():
 
     return args, cfg
 
+def to_numpy(tensor):
+    return tensor.detach().cpu().numpy() if tensor.requires_grad else tensor.cpu().numpy()
+            
 def main():
     args, cfg = parse_config()
-    
-    # 导出模型配置参数
-    # export_paramters(cfg)
     
     logger = common_utils.create_logger()
     logger.info('------ Convert OpenPCDet model for TensorRT ------')
@@ -130,65 +133,36 @@ def main():
 
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=demo_dataset)
     model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
-    # model.to('cpu')
     model.cuda()
     model.eval()
-    
+
     # 打印模型
     print(model)
     
-    # np.set_printoptions(threshold=np.inf)
-    # with torch.no_grad():
+    onnx_model = onnx.load("xxxx.onnx")
+    onnx.checker.check_model(onnx_model)
+    print(onnx_model)
+    
+    with torch.no_grad():
+        for idx, data_dict in enumerate(demo_dataset):
+            logger.info(f'Visualized sample index: \t{idx + 1}')
+            data_dict = demo_dataset.collate_batch([data_dict])
+            load_data_to_gpu(data_dict)
+            pred_dicts, _ = model.forward(data_dict)
+            
+            data_dict['encoded_spconv_tensor']
 
-    #   MAX_VOXELS = 10000
+            # # 使用 ONNX Runtime 运行模型
+            # ort_session = onnxruntime.InferenceSession("xxxx.onnx")
 
-    #   dummy_voxels = torch.zeros(
-    #       (MAX_VOXELS, 32, 4),
-    #       dtype=torch.float32,
-    #       device='cuda:0')
-
-    #   dummy_voxel_idxs = torch.zeros(
-    #       (MAX_VOXELS, 4),
-    #       dtype=torch.int32,
-    #       device='cuda:0')
-
-    #   dummy_voxel_num = torch.zeros(
-    #       (1),
-    #       dtype=torch.int32,
-    #       device='cuda:0')
-
-    #   dummy_input = dict()
-    #   dummy_input['voxels'] = dummy_voxels
-    #   dummy_input['voxel_num_points'] = dummy_voxel_num
-    #   dummy_input['voxel_coords'] = dummy_voxel_idxs
-    #   dummy_input['batch_size'] = 1
-      
-    #   torch.onnx.export(model,       # model being run
-    #       dummy_input,               # model input (or a tuple for multiple inputs)
-    #       "./kitti_centerpoint.onnx",  # where to save the model (can be a file or file-like object)
-    #       export_params=True,        # store the trained parameter weights inside the model file
-    #       opset_version=11,          # the ONNX version to export the model to
-    #       do_constant_folding=True,  # whether to execute constant folding for optimization
-    #       keep_initializers_as_inputs=False,
-    #       input_names = ['voxels', 'voxel_num', 'voxel_idxs'],   # the model's input names
-    #       output_names = [  'reg_0', 'height_0', 'dim_0', 'rot_0', 'vel_0', 'hm_0',
-    #                         'reg_1', 'height_1', 'dim_1', 'rot_1', 'vel_1', 'hm_1',
-    #                         'reg_2', 'height_2', 'dim_2', 'rot_2', 'vel_2', 'hm_2'],
-    #       )
-
-    # onnx_raw = onnx.load("./kitti_multheadPP.onnx")  # load onnx model
-    # onnx_simp, check = simplify(onnx_raw)
-    # onnx.save(onnx_simp, "kitti_multheadPP_simple.onnx")
-
-    # onnx_raw = onnx.load("./kitti_multheadPP_simple.onnx")  # load onnx model
-    # onnx_trim_post = simplify_postprocess(onnx_raw)
-    # onnx.save(onnx_trim_post, "kitti_multheadPP_simple2.onnx")
-      
-    # onnx_final = simplify_preprocess(onnx_trim_post)
-    # onnx.save(onnx_final, "kitti_multheadPP_final.onnx")
-    # print('finished exporting onnx')
-
-    # logger.info('[PASS] ONNX EXPORTED.')
+            # #构建输入并得到输出
+            # ort_inputs = {ort_session.get_inputs()[0].name: to_numpy(data_input)}
+            # ort_outs = ort_session.run(None, ort_inputs)
+            # ort_out = ort_outs[0]
+            
+            # np.testing.assert_allclose(to_numpy(torch_out), ort_out, rtol=1e-03, atol=1e-05)
+    
+    logger.info('Demo done.')
 
 if __name__ == '__main__':
     main()
