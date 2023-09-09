@@ -23,7 +23,7 @@ import sys; sys.path.insert(0, ".")
 
 from pcdet.utils import common_utils
 from pcdet.datasets import DatasetTemplate
-from pcdet.models.backbones_3d import VoxelBackBone8x
+from pcdet.models.backbones_3d import VoxelResBackBone8x
 # from det3d.models.backbones.scn import SpMiddleResNetFHD
 import torch
 import pickle
@@ -36,7 +36,7 @@ import numpy as np
 
 if __name__ == "__main__":
     
-    ckpt_file = "./checkpoint_epoch_40.pth"
+    ckpt_file = "./centerpoint_res_epoch_40.pth"
     parser = argparse.ArgumentParser(description="Export scn to onnx file")
     parser.add_argument("--in-channel", type=int, default=4, help="SCN num of input channels")
     parser.add_argument("--ckpt", type=str, default=ckpt_file, help="SCN Checkpoint (scn backbone checkpoint)")
@@ -45,8 +45,8 @@ if __name__ == "__main__":
     parser.add_argument("--save-tensor", type=str, default=None, help="Save input/output tensor to file. The purpose of this operation is to verify the inference result of c++")
     args = parser.parse_args()
     
-    spatial_shape = np.array( [1408, 1600,   40])
-    model = VoxelBackBone8x(args.in_channel, spatial_shape).cuda().eval().half()
+    spatial_shape = np.array( [1408, 1600, 40])
+    model = VoxelResBackBone8x(args.in_channel, spatial_shape).cuda().eval().half()
     # print("-------------------------------------------------------------")
     # print(model)
     if args.ckpt:

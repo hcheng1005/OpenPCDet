@@ -170,7 +170,7 @@ def node_sparse_conv_tensor_dense(self, ilayer, y):
         )
     )
 
-@register_node("torch.Tensor.view")
+@register_node("torch.Tensor.reshape")
 def node_view(self, ilayer, y, *dims):
     register_tensor(y)
     print(f"   --> Reshape{ilayer}[{dims}] -> Input {get_tensor_id(self)}, Output {get_tensor_id(y)}")
@@ -245,17 +245,16 @@ def make_model_forward_hook(self, inverse_indices=False):
         # for detection head
         # [200, 176, 5] -> [200, 176, 2]
         out = self.conv_out(x_conv4)
-        
         spatial_features = out.dense()
 
         # if inverse_indices:
-        #     N, C, Z, Y, X = spatial_features.shape
-        #     spatial_features = spatial_features.permute(0, 1, 2, 4, 3)
-        #     spatial_features = spatial_features.reshape(N, C * Z, X, Y)
+        N, C, Z, Y, X = spatial_features.shape
+        spatial_features = spatial_features.permute(0, 1, 2, 4, 3)
+        spatial_features = spatial_features.reshape(N, C * Z, Y, X)
         # else:
-        #     N, C, X, Y, Z = spatial_features.shape
-        #     spatial_features = spatial_features.permute(0, 1, 4, 2, 3)
-        #     spatial_features = spatial_features.reshape(N, C * Z, X, Y)
+        # N, C, X, Y, Z = spatial_features.shape
+        # spatial_features = spatial_features.permute(0, 1, 4, 2, 3)
+        # spatial_features = spatial_features.reshape(N, C * Z, X, Y)
         return spatial_features
     return impl
 

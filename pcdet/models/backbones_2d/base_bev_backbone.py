@@ -109,6 +109,26 @@ class BaseBEVBackbone(nn.Module):
         data_dict['spatial_features_2d'] = x
 
         return data_dict
+    
+    # def forward(self, spatial_features):      
+    #     ups = []
+    #     x = spatial_features
+    #     for i in range(len(self.blocks)):
+    #         x = self.blocks[i](x)
+    #         if len(self.deblocks) > 0:
+    #             ups.append(self.deblocks[i](x))
+    #         else:
+    #             ups.append(x)
+
+    #     if len(ups) > 1:
+    #         x = torch.cat(ups, dim=1)
+    #     elif len(ups) == 1:
+    #         x = ups[0]
+
+    #     if len(self.deblocks) > len(self.blocks):
+    #         x = self.deblocks[-1](x)
+
+    #     return x
 
 
 class BaseBEVBackboneV1(nn.Module):

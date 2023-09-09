@@ -424,6 +424,7 @@ class CenterHead(nn.Module):
             )
             self.forward_ret_dict['target_dicts'] = target_dict
 
+        data_dict["pred_dicts"] = pred_dicts
         self.forward_ret_dict['pred_dicts'] = pred_dicts
 
         if not self.training or self.predict_boxes_when_training:
@@ -440,3 +441,15 @@ class CenterHead(nn.Module):
                 data_dict['final_box_dicts'] = pred_dicts
 
         return data_dict
+    
+    # def forward(self, spatial_features_2d):
+    #     # spatial_features_2d = data_dict['spatial_features_2d']
+    #     x = self.shared_conv(spatial_features_2d)
+
+    #     pred_dicts = []
+    #     for head in self.heads_list:
+    #         pred_dicts.append(head(x))
+ 
+    #     pred_dicts = self.generate_predicted_boxes(1, pred_dicts)
+
+    #     return pred_dicts

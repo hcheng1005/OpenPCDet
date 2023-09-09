@@ -184,10 +184,11 @@ class VoxelBackBone8x(nn.Module):
 
 
 class VoxelResBackBone8x(nn.Module):
-    def __init__(self, model_cfg, input_channels, grid_size, **kwargs):
+    def __init__(self, input_channels, grid_size, **kwargs):
         super().__init__()
-        self.model_cfg = model_cfg
-        use_bias = self.model_cfg.get('USE_BIAS', None)
+        # self.model_cfg = model_cfg
+        # use_bias = self.model_cfg.get('USE_BIAS', None)
+        use_bias = None
         norm_fn = partial(nn.BatchNorm1d, eps=1e-3, momentum=0.01)
 
         self.sparse_shape = grid_size[::-1] + [1, 0, 0]
@@ -226,7 +227,7 @@ class VoxelResBackBone8x(nn.Module):
         )
 
         last_pad = 0
-        last_pad = self.model_cfg.get('last_pad', last_pad)
+        # last_pad = self.model_cfg.get('last_pad', last_pad)
         self.conv_out = spconv.SparseSequential(
             # [200, 150, 5] -> [200, 150, 2]
             spconv.SparseConv3d(128, 128, (3, 1, 1), stride=(2, 1, 1), padding=last_pad,
