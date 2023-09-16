@@ -1,32 +1,13 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: MIT
-#
-# Permission is hereby granted, free of charge, to any person obtaining a
-# copy of this software and associated documentation files (the "Software"),
-# to deal in the Software without restriction, including without limitation
-# the rights to use, copy, modify, merge, publish, distribute, sublicense,
-# and/or sell copies of the Software, and to permit persons to whom the
-# Software is furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-# DEALINGS IN THE SOFTWARE.
-
 import torch
 import collections
-# from det3d.models.backbones.scn import SpMiddleResNetFHD
-from pcdet.models.backbones_3d import VoxelBackBone8x
+from pcdet.models.backbones_3d import VoxelResBackBone8x
 
+import spconv
 from spconv.pytorch import SparseSequential
 from spconv.pytorch import conv
 from spconv.pytorch.conv import SubMConv3d, SparseConv3d
+
+from spconv.pytorch.conv import SparseConvolution, SparseConvTensor
 
 # from det3d.models.backbones.scn import SparseBasicBlock
 from pcdet.models.backbones_3d import SparseBasicBlock
@@ -44,6 +25,43 @@ def make_new_repr(old_repr):
 
 # setup repr function, add activation
 conv.SparseConvolution.__repr__ = make_new_repr(conv.SparseConvolution.__repr__)
+
+def load_scn_backbone_checkpoint(model, file):
+
+    device   = next(model.parameters()).device    
+    ckpt     = torch.load(file, map_location=device)["model_state"]
+    new_ckpt = collections.OrderedDict()
+    for key, val in ckpt.items():
+        if key.startswith("backbone_3d."):
+            newkey = key[key.find(".")+1:]
+            new_ckpt[newkey] = val
+
+    model.load_state_dict(new_ckpt)
+    return model
+
+def layer_fusion(model):
+    def set_attr_by_path(m, path, newval):
+        def set_attr_by_array(parent, arr):
+            if len(arr) == 1: 
+                setattr(parent, arr[0], newval)
+                return parent
+            parent = getattr(parent, arr[0])
+            return set_attr_by_array(parent, arr[1:])
+
+        return set_attr_by_array(m, path.split("."))
+
+    for name, module in model.named_modules():
+        if isinstance(module, SparseSequential):
+            if isinstance(module[0], SubMConv3d) or isinstance(module[0], SparseConv3d):
+                c, b, r = [module[i] for i in range(3)]
+                fuse_bn(c, b)
+                c.act_type = tv.gemm.Activation.ReLU
+                set_attr_by_path(model, name, c)
+        elif isinstance(module, SparseBasicBlock):
+            fuse_sparse_basic_block(module, is_fuse_relu= True, is_fuse_bn= True)
+        elif isinstance(module, torch.nn.ReLU): 
+            module.inplace = False
+    return model
 
 def fuse_bn_weights(conv_w_OKI, conv_b, bn_rm, bn_rv, bn_eps, bn_w, bn_b):
     NDim = conv_w_OKI.ndim - 2
@@ -69,29 +87,28 @@ def fuse_bn(conv, bn):
     Given a conv Module `A` and an batch_norm module `B`, returns a conv
     module `C` such that C(x) == B(A(x)) in inference mode.
     """
-    assert(not (conv.training or bn.training)), "Fusion only for eval!"
+    #assert(not (conv.training or bn.training)), "Fusion only for eval!"
+    # conv.weight, conv.bias = fuse_bn_weights(conv.weight.permute(4, 0, 1, 2, 3), conv.bias, bn.running_mean, bn.running_var, bn.eps, bn.weight, bn.bias)
+    # conv.weight.data = conv.weight.data.permute(1, 2, 3, 4, 0)
+    
     # print(conv)
+    
     conv.weight, conv.bias = fuse_bn_weights(conv.weight, conv.bias, bn.running_mean, bn.running_var, bn.eps, bn.weight, bn.bias)
 
-def load_scn_backbone_checkpoint(model, file):
 
+def load_checkpoint(model, file, startsname=None):
     device   = next(model.parameters()).device
-    ckpt2 = torch.load(file, map_location=device)
-    # print(ckpt2["model_state"].keys())
-    
-    ckpt     = torch.load(file, map_location=device)["model_state"]
-    new_ckpt = collections.OrderedDict()
-    for key, val in ckpt.items():
-        if key.startswith("backbone_3d."):
-            newkey = key[key.find(".")+1:]
+    ckpt     = torch.load(file, map_location=device)["state_dict"]
+    new_ckpt = ckpt
+    if startsname is not None:
+        new_ckpt = collections.OrderedDict()
+        for key, val in ckpt.items():
+            if key.startswith(startsname):
+                newkey = key[len(startsname)+1:]
+                new_ckpt[newkey] = val
 
-            # if val.ndim == 5:
-            #     val = val.permute(4, 0, 1, 2, 3)
+    model.load_state_dict(new_ckpt, strict =True)
 
-            new_ckpt[newkey] = val
-
-    model.load_state_dict(new_ckpt)
-    return model
 
 def new_sparse_basic_block_forward(self):
     def sparse_basic_block_forward(x):
@@ -107,22 +124,65 @@ def new_sparse_basic_block_forward(self):
         return out
     return sparse_basic_block_forward
 
-def fuse_sparse_basic_block(self):
+
+def fuse_sparse_basic_block(self, is_fuse_bn = False, is_fuse_relu=True):
     self.forward = new_sparse_basic_block_forward(self)
-    self.conv1.act_type = tv.gemm.Activation.ReLU
-    fuse_bn(self.conv1, self.bn1)
-    fuse_bn(self.conv2, self.bn2)
-    delattr(self, "bn1")
-    delattr(self, "bn2")
+    if is_fuse_relu == True:
+        self.conv1.act_type = tv.gemm.Activation.ReLU 
 
-# def layer_fusion(model : VoxelBackBone8x):
+    if is_fuse_bn == True:
+        fuse_bn(self.conv1, self.bn1)
+        fuse_bn(self.conv2, self.bn2)
+        delattr(self, "bn1")
+        delattr(self, "bn2")
 
+def layer_fusion_bn(model):
+
+    def set_attr_by_path(m, path, newval):
+
+        def set_attr_by_array(parent, arr):
+            if len(arr) == 1: 
+                setattr(parent, arr[0], newval)
+                return parent
+
+            parent = getattr(parent, arr[0])
+            return set_attr_by_array(parent, arr[1:])
+
+        return set_attr_by_array(m, path.split("."))
+
+
+    for name, module in model.named_modules():
+        if isinstance(module, SparseSequential):
+            if isinstance(module[0], spconv.conv.SparseConvolution):
+                c, b, r = [module[i] for i in range(3)]
+                fuse_bn(c, b)
+
+                c = SparseSequential(
+                    c,r
+                )
+                set_attr_by_path(model, name, c)
+        elif isinstance(module, SparseBasicBlock):
+            fuse_sparse_basic_block(module, is_fuse_bn = True, is_fuse_relu =False)
+        elif isinstance(module, torch.nn.ReLU): 
+            module.inplace = False
+    return model
+
+
+# # export for orignal model
+# def layer_fusion_bn_relu(model : VoxelResBackBone8x):
 #     # fuse all conv
-#     for conv_name in ["conv_input", "conv2", "conv3", "conv4", "extra_conv"]:
+#     for conv_name in ["conv_input", "conv2", "conv3", "conv4", "conv_out"]:
 #         conv_instance = getattr(model, conv_name)
-#         c, b, r = [conv_instance[i] for i in range(3)]
+#         print(conv_name)
+#         print(conv_instance)
+        
+#         if conv_name != "conv_input" and conv_name != "conv_out" :
+#             c, b, r = [conv_instance[0][i] for i in range(3)]
+#         else:
+#             c, b, r = [conv_instance[i] for i in range(3)]
 #         fuse_bn(c, b)
 #         c.act_type = tv.gemm.Activation.ReLU
+        
 #         if len(conv_instance) == 3:
 #             new_conv = c
 #         else:
@@ -134,7 +194,7 @@ def fuse_sparse_basic_block(self):
 #     # fuse all SparseBasicBlock
 #     for name, block in model.named_modules():
 #         if isinstance(block, SparseBasicBlock):
-#             fuse_sparse_basic_block(block)
+#             fuse_sparse_basic_block(block, is_fuse_relu= True, is_fuse_bn= True)
 #     return model
 
 def layer_fusion(model):
@@ -156,49 +216,7 @@ def layer_fusion(model):
                 c.act_type = tv.gemm.Activation.ReLU
                 set_attr_by_path(model, name, c)
         elif isinstance(module, SparseBasicBlock):
-            fuse_sparse_basic_block(module)
+            fuse_sparse_basic_block(module, is_fuse_relu= True, is_fuse_bn= True)
         elif isinstance(module, torch.nn.ReLU): 
             module.inplace = False
     return model
-
-# This function stores a file that can be very easily loaded and used by c++
-def save_tensor(tensor, file):
-
-    if isinstance(tensor, torch.Tensor):
-        tensor = tensor.detach().cpu().data.numpy()
-    elif not isinstance(tensor, np.ndarray):
-        tensor = np.array(tensor)
-
-    dtype_map = {"float32" : 0, "float16" : 1, "int32" : 2, "int64" : 3}
-    if str(tensor.dtype) not in dtype_map:
-        raise RuntimeError(f"Unsupport dtype {tensor.dtype}")
-
-    magic_number = 0x33ff1101
-    with open(file, "wb") as f:
-        head = np.array([magic_number, tensor.ndim, dtype_map[str(tensor.dtype)]], dtype=np.int32).tobytes()
-        f.write(head)
-
-        dims = np.array(tensor.shape, dtype=np.int32).tobytes()
-        f.write(dims)
-        
-        data = tensor.tobytes()
-        f.write(data)
-
-# This function stores a file that can be very easily loaded and used by c++
-def load_tensor(file):
-
-    dtype_for_integer_mapping = {0: np.float32, 1: np.float16, 2: np.int32, 3: np.int64}
-    dtype_size_mapping        = {np.float32 : 4, np.float16 : 2, np.int32 : 4, np.int64 : 8}
-
-    with open(file, "rb") as f:
-        magic_number, ndim, dtype_integer = np.frombuffer(f.read(12), dtype=np.int32)
-        if dtype_integer not in dtype_for_integer_mapping:
-            raise RuntimeError(f"Can not find match dtype for index {dtype_integer}")
-
-        dtype            = dtype_for_integer_mapping[dtype_integer]
-        magic_number_std = 0x33ff1101
-        assert magic_number == magic_number_std, f"this file is not tensor file"
-        dims   = np.frombuffer(f.read(ndim * 4), dtype=np.int32)
-        volumn = np.cumprod(dims)[-1]
-        data   = np.frombuffer(f.read(volumn * dtype_size_mapping[dtype]), dtype=dtype).reshape(*dims)
-        return data

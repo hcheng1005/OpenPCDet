@@ -1,4 +1,5 @@
 import torch.nn as nn
+import numpy as np
 
 
 class HeightCompression(nn.Module):
@@ -20,7 +21,17 @@ class HeightCompression(nn.Module):
         encoded_spconv_tensor = batch_dict['encoded_spconv_tensor']
         spatial_features = encoded_spconv_tensor.dense()
         N, C, D, H, W = spatial_features.shape
+        
+        # print( N, C, D, H, W)
+        
         spatial_features = spatial_features.view(N, C * D, H, W)
         batch_dict['spatial_features'] = spatial_features
         batch_dict['spatial_features_stride'] = batch_dict['encoded_spconv_tensor_stride']
+        
+        # spatial_features2 = np.array(spatial_features.cpu().numpy())
+        # spatial_features2.tofile('./spatial_features.bin')
+        
+        # print(spatial_features)
+        # print(spatial_features2.shape)
+        
         return batch_dict

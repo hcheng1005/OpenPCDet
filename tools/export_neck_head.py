@@ -137,23 +137,22 @@ def main():
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=demo_dataset)
     model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
     
-    print(model)
+    # print(model)
     
     # 截取模型的neck和head部分
     post_model = CenterPointVoxelNet_Post(model)
 
-    model.eval()
-    post_model.eval()
+    # model.eval()
+    # post_model.eval()
 
-    model = model.cuda()
+    # model = model.cuda()
 
+    if(1): 
+        post_model = post_model.cuda()
     
-    if(0): 
-        post_model = post_model.cuda().half()
-    
-        rpn_input = torch.load("spatial_features.tensor").half()
-        onnx_output =  post_model.forward(rpn_input)
-        torch.save(onnx_output, "onnx_output.tensor")
+        rpn_input = torch.load("spatial_features.tensor")
+        # onnx_output =  post_model.forward(rpn_input)
+        # torch.save(onnx_output, "onnx_output.tensor")
         
         # 调用onnx-export进行模型导出
         # rpn_input = data_dict['spatial_features'], 
@@ -170,7 +169,7 @@ def main():
         onnx.save(sim_model, "centerpoint_rpn.onnx")
         print("[PASS] Export ONNX done.")
        
-    if(1):        
+    if(0):        
         with torch.no_grad():
             for idx, data_dict in enumerate(demo_dataset):
                 logger.info(f'Visualized sample index: \t{idx + 1}')

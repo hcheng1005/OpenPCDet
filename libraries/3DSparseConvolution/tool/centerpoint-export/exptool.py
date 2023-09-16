@@ -27,6 +27,7 @@ import numpy as np
 import spconv.pytorch as spconv
 import cumm.tensorview as tv
 from spconv.core import ConvAlgo
+import torch.nn as nn
 
 avoid_reuse_container = []
 obj_to_tensor_id = {}
@@ -88,6 +89,18 @@ def symbolic_sparse_convolution(self, ilayer, y, x):
         get_tensor_id(x), 
         append_initializer(self.weight.data, f"spconv{ilayer}.weight"),
     ]
+    
+    # output_size[1] = self.out_channels
+    # inputs = [
+    #     get_tensor_id(x), 
+    #     append_initializer(self.weight.data.permute(4, 0, 1, 2, 3), f"spconv{ilayer}.weight"),
+    # ]
+    
+    # output_size[1] = self.out_channels
+    # inputs = [
+    #     get_tensor_id(x), 
+    #     append_initializer(self.weight.data.permute(4, 0, 1, 2, 3), f"spconv{ilayer}.weight"),
+    # ]
 
     if self.bias is not None:
         inputs.append(append_initializer(self.bias.data, f"spconv{ilayer}.bias"))
@@ -98,12 +111,6 @@ def symbolic_sparse_convolution(self, ilayer, y, x):
         tv.gemm.Activation.Sigmoid   : "Sigmoid",
         tv.gemm.Activation.LeakyReLU : "LeakyReLU"
     }
-
-    # algo_name = {
-    #     ConvAlgo.MaskImplicitGemm      : "MaskImplicitGemm",
-    #     ConvAlgo.MaskSplitImplicitGemm : "MaskSplitImplicitGemm",
-    #     ConvAlgo.Native : "Native",
-    # }
 
     output_bound = 200000
     if hasattr(self, "output_bound"):
@@ -123,7 +130,7 @@ def symbolic_sparse_convolution(self, ilayer, y, x):
             dilation = self.dilation,
             padding = self.padding,
             transposed = self.transposed,
-            inverse = self.inverse,
+            inverse = False,
             output_padding = self.output_padding,
             groups = self.groups,
             subm = self.subm,
@@ -161,12 +168,23 @@ def node_sparse_conv_tensor_dense(self, ilayer, y):
     register_tensor(y)
     print(f"   --> ToDense{ilayer}[{self.spatial_shape}][{list(y.size())}] -> Input {get_tensor_id(self)}, Output {get_tensor_id(y)}")
     
+    # nodes.append(
+    #     helper.make_node(
+    #         "ScatterDense", [get_tensor_id(self)], [get_tensor_id(y)], f"scatter{ilayer}",
+    #         input_spatial_shape = self.spatial_shape,
+    #         format              = "xyz",
+    #         output_shape        = y.size()
+    #     )
+    # )
+    
+    # format = "xyz"
+    format = "zyx"
     nodes.append(
         helper.make_node(
             "ScatterDense", [get_tensor_id(self)], [get_tensor_id(y)], f"scatter{ilayer}",
             input_spatial_shape = self.spatial_shape,
-            format              = "zyx",
-            output_shape        = y.size()
+            format              = format,
+            output_shape        = list(y.size())
         )
     )
 
@@ -236,7 +254,10 @@ def make_model_forward_hook(self, inverse_indices=False):
         input_sp_tensor = spconv.SparseConvTensor(
             voxel_features, coors, self.sparse_shape, batch_size
         )
+        
+        print(input_sp_tensor)
         x = self.conv_input(input_sp_tensor)
+        
         x_conv1 = self.conv1(x)
         x_conv2 = self.conv2(x_conv1)
         x_conv3 = self.conv3(x_conv2)
@@ -246,18 +267,33 @@ def make_model_forward_hook(self, inverse_indices=False):
         # [200, 176, 5] -> [200, 176, 2]
         out = self.conv_out(x_conv4)
         spatial_features = out.dense()
-
-        # if inverse_indices:
+        
         N, C, Z, Y, X = spatial_features.shape
-        spatial_features = spatial_features.permute(0, 1, 2, 4, 3)
+        # spatial_features = spatial_features.permute(0, 1, 2, 4, 3)
         spatial_features = spatial_features.reshape(N, C * Z, Y, X)
-        # else:
-        # N, C, X, Y, Z = spatial_features.shape
-        # spatial_features = spatial_features.permute(0, 1, 4, 2, 3)
-        # spatial_features = spatial_features.reshape(N, C * Z, X, Y)
+        
+        # N, C, D, H, W = spatial_features.shape        
+        # spatial_features = spatial_features.reshape(N, C * D, H, W)
+            
         return spatial_features
+    
     return impl
 
+
+def inverse_model(model : nn.Module):
+    # change index xyz to zyx
+    model.sparse_shape = model.sparse_shape[::-1]
+    for name, module in model.named_modules():
+        if isinstance(module, spconv.conv.SparseConvolution):
+            # (xyz) I, O
+            module.weight.data = module.weight.data.permute(2, 1, 0, 3, 4).contiguous()
+            module.padding = module.padding[::-1]
+            module.stride = module.stride[::-1]
+            module.dilation = module.dilation[::-1]
+            module.kernel_size = module.kernel_size[::-1]
+            module.output_padding = module.output_padding[::-1]
+            
+            
 def export_onnx(model, voxels, coors, batch_size, spatial_shape, save_onnx, save_tensor):
 
     global avoid_reuse_container, tensor_map, nodes, initializers, enable_trace
@@ -266,12 +302,22 @@ def export_onnx(model, voxels, coors, batch_size, spatial_shape, save_onnx, save
     nodes = []
     initializers = []
     
-    spatial_shape = model.sparse_shape
+    # spatial_shape = model.sparse_shape
+    # spatial_shape = spatial_shape[::-1]
+    # coors = coors[:, [0, 3, 2, 1]]
+    # inverse_model(model)
     
+    # print("spatial_shape: ", spatial_shape)
     
-    print("spatial_shape: ", spatial_shape)
+    # for i, layers in enumerate(model.encoder_layers):
+    #     m0, m1 = layers[0], layers[1]
+    #     # @!!!! Warning~  the first subm layer's indice_key is subm1
+    #     m0.conv1.indice_key = f"subm{i+1}"
+    #     m0.conv2.indice_key = f"subm{i+1}"
+    #     m1.conv1.indice_key = f"subm{i+1}"
+    #     m1.conv2.indice_key = f"subm{i+1}"
     
-    model.forward = make_model_forward_hook(model, False)
+    model.forward = make_model_forward_hook(model, True)
 
     print("Tracing model inference...")
     print("> Do inference...")
@@ -285,22 +331,25 @@ def export_onnx(model, voxels, coors, batch_size, spatial_shape, save_onnx, save
          
         enable_trace = True
         y = model(voxels, coors, batch_size)
+
         enable_trace = False
+        
+        print(sum(sum(sum(y))))
 
-    # if save_tensor is not None:
-    print("> Do save tensor, The purpose of this operation is to verify the inference result of C++")
-    print(f"   --> Save inference input voxels to {save_tensor}.voxels, voxels.shape = {voxels.shape}")
-    funcs.save_tensor(voxels, f"{save_tensor}.voxels")
+    if save_tensor is not None:
+        print("> Do save tensor, The purpose of this operation is to verify the inference result of C++")
+        print(f"   --> Save inference input voxels to {save_tensor}.voxels, voxels.shape = {voxels.shape}")
+        funcs.save_tensor(voxels, f"{save_tensor}.voxels")
 
-    print(f"   --> Save inference input coors to {save_tensor}.coors, coors.shape = {coors.shape}")
-    funcs.save_tensor(coors,  f"{save_tensor}.coors")
+        print(f"   --> Save inference input coors to {save_tensor}.coors, coors.shape = {coors.shape}")
+        funcs.save_tensor(coors,  f"{save_tensor}.coors")
 
-    print(f"   --> Save inference output to {save_tensor}.output, output.shape = {y.shape}")
-    funcs.save_tensor(y,      f"{save_tensor}.output")
-    
-    print(f"   --> Save spatial_shape is {spatial_shape}, batch size is {batch_size}")
-    print(f"   --> Save spatial_shape and batch size to {save_tensor}.info")
-    funcs.save_tensor([batch_size] + spatial_shape,      f"{save_tensor}.info")
+        print(f"   --> Save inference output to {save_tensor}.output, output.shape = {y.shape}")
+        funcs.save_tensor(y,      f"{save_tensor}.output")
+        
+        print(f"   --> Save spatial_shape is {spatial_shape}, batch size is {batch_size}")
+        print(f"   --> Save spatial_shape and batch size to {save_tensor}.info")
+        funcs.save_tensor([batch_size] + spatial_shape,      f"{save_tensor}.info")
 
     print("Tracing done!")
 
@@ -337,6 +386,8 @@ def export_onnx(model, voxels, coors, batch_size, spatial_shape, save_onnx, save
     ]
 
     model = helper.make_model(graph, opset_imports=opset, producer_name="pytorch", producer_version="1.9")
+    
+    # print(model)
     onnx.save_model(model, save_onnx)
     print(f"🚀 The export is completed. ONNX save as {save_onnx} 🤗, Have a nice day~")
 

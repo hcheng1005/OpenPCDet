@@ -19,6 +19,7 @@ import torch
 import argparse
 import numpy as np
 import onnxruntime
+import time
 
 from pathlib import Path
 from onnxsim import simplify
@@ -26,38 +27,6 @@ from pcdet.utils import common_utils
 from pcdet.models import build_network, load_data_to_gpu
 from pcdet.datasets import DatasetTemplate
 from pcdet.config import cfg, cfg_from_yaml_file
-
-from pcdet.models.backbones_3d import VoxelBackBone8x
-
-# from exporter_paramters import export_paramters as export_paramters
-from simplifier_nus_multpp_onnx import simplify_preprocess, simplify_postprocess
-
-import math
-
-from torch.onnx.symbolic_registry import register_op 
- 
-
-def atan2_symbolic(g, self, other):
-    # self is y, and other is x on coordinate
-    slope = g.op("Div", self, other)
-    atan = g.op("Atan", slope)
-    const_zero = g.op("Constant", value_t=torch.tensor(0).to('cuda:0'))
-    const_pi = g.op("Constant", value_t=torch.tensor(math.pi).to('cuda:0'))
-
-    condition_second_or_third_quadrant = g.op("Greater", self, const_zero)
-    second_third_quadrant = g.op(
-        "Where",
-        condition_second_or_third_quadrant,
-        g.op("Add", atan, const_pi),
-        g.op("Sub", atan, const_pi),
-    )
-
-    condition_14_or_23_quadrant = g.op("Less", other, const_zero)
-    result = g.op("Where", condition_14_or_23_quadrant, second_third_quadrant, atan)
-
-    return result
-
-register_op('atan2', atan2_symbolic, '', 11)  
 
 
 class DemoDataset(DatasetTemplate):
@@ -100,14 +69,14 @@ class DemoDataset(DatasetTemplate):
         return data_dict
     
 def parse_config():    
-    data_path="/media/charles/ShareDisk/00myDataSet/KITTI/archive/training/velodyne"
-    cfg_ = '../output/cfgs/kitti_models/centerpoint/centerpoint.yaml'
-    ckpt_ = '../output/cfgs/kitti_models/centerpoint/checkpoint_epoch_40.pth'
+    data_path="/root/autodl-tmp/code/OpenPCDet/data/kitti/training/velodyne"
+    cfg_ = '../output/cfgs/kitti_models/centerpoint_res/default/centerpoint_res.yaml'
+    ckpt_ = '../output/cfgs/kitti_models/centerpoint_res/default/ckpt/checkpoint_epoch_40.pth'
     
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--cfg_file', type=str, default=cfg_,
                         help='specify the config for demo')
-    parser.add_argument('--data_path', type=str, default="demo",
+    parser.add_argument('--data_path', type=str, default=data_path,
                         help='specify the point cloud data file or directory')
     parser.add_argument('--ckpt', type=str, default=ckpt_, help='specify the pretrained model')
     parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')
@@ -139,18 +108,20 @@ def main():
     # 打印模型
     print(model)
     
-    onnx_model = onnx.load("xxxx.onnx")
-    onnx.checker.check_model(onnx_model)
-    print(onnx_model)
-    
+
     with torch.no_grad():
         for idx, data_dict in enumerate(demo_dataset):
             logger.info(f'Visualized sample index: \t{idx + 1}')
             data_dict = demo_dataset.collate_batch([data_dict])
             load_data_to_gpu(data_dict)
-            pred_dicts, _ = model.forward(data_dict)
             
-            data_dict['encoded_spconv_tensor']
+            start_time = time.time()
+            pred_dicts, _ = model.forward(data_dict)
+            end_time = time.time()
+
+            print("计算时间：{}".format(end_time - start_time))
+            
+            # data_dict['encoded_spconv_tensor']
 
             # # 使用 ONNX Runtime 运行模型
             # ort_session = onnxruntime.InferenceSession("xxxx.onnx")

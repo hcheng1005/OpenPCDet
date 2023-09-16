@@ -4,9 +4,9 @@ from pathlib import Path
 import time
 
 # try:
-import open3d
-from visual_utils import open3d_vis_utils as V
-OPEN3D_FLAG = True
+# import open3d
+# from visual_utils import open3d_vis_utils as V
+# OPEN3D_FLAG = True
 # except:
 # import mayavi.mlab as mlab
 # from visual_utils import visualize_utils as V
@@ -62,9 +62,9 @@ class DemoDataset(DatasetTemplate):
 
 
 def parse_config():
-    data_path="/media/charles/ShareDisk/00myDataSet/KITTI/archive/training/velodyne"
-    cfg_ = '../output/cfgs/kitti_models/centerpoint/centerpoint.yaml'
-    ckpt_ = '../output/cfgs/kitti_models/centerpoint/checkpoint_epoch_40.pth'
+    data_path="./testdata/kitti"
+    cfg_ = '../output/cfgs/kitti_models/centerpoint_res/default/centerpoint_res.yaml'
+    ckpt_ = '../output/cfgs/kitti_models/centerpoint_res/default/ckpt/checkpoint_epoch_40.pth'
     # cfg_ = 'cfgs/kitti_models/centerpoint.yaml'
     # ckpt_ = 'ckpt/kitti/checkpoint_epoch_66.pth'
     
@@ -95,16 +95,16 @@ def main():
     model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
     
     # 打印模型结构
-    print(model)
+    # print(model)
         
     model.cuda()
     model.eval()
 
-    #3D界面初始化
-    vis = open3d.visualization.Visualizer()
-    vis.create_window()
-    vis.get_render_option().point_size = 1.0
-    vis.get_render_option().background_color = np.zeros(3)
+    # #3D界面初始化
+    # vis = open3d.visualization.Visualizer()
+    # vis.create_window()
+    # vis.get_render_option().point_size = 1.0
+    # vis.get_render_option().background_color = np.zeros(3)
     
     with torch.no_grad():
         for idx, data_dict in enumerate(demo_dataset):
@@ -117,14 +117,15 @@ def main():
             end_time = time.time()
 
             print("计算时间：{}".format(end_time - start_time))
+            print(data_dict["pred_dicts"][0]['center'])
             
             # print("pred_boxes \n", pred_dicts[0]['pred_boxes'])
             # print("pred_scores \n", pred_dicts[0]['pred_scores'])
 
-            V.draw_scenes(vis,
-                points=data_dict['points'][:, 1:], ref_boxes=pred_dicts[0]['pred_boxes'],
-                ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels']
-            )
+            # V.draw_scenes(vis,
+            #     points=data_dict['points'][:, 1:], ref_boxes=pred_dicts[0]['pred_boxes'],
+            #     ref_scores=pred_dicts[0]['pred_scores'], ref_labels=pred_dicts[0]['pred_labels']
+            # )
             
             time.sleep(0.5)
             # if not OPEN3D_FLAG:

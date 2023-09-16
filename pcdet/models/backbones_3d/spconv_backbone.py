@@ -3,7 +3,7 @@ from functools import partial
 import torch.nn as nn
 
 from ...utils.spconv_utils import replace_feature, spconv
-
+import numpy as np
 
 def post_act_block(in_channels, out_channels, kernel_size, indice_key=None, stride=1, padding=0,
                    conv_type='subm', norm_fn=None):
@@ -255,6 +255,19 @@ class VoxelResBackBone8x(nn.Module):
                 encoded_spconv_tensor: sparse tensor
         """
         voxel_features, voxel_coords = batch_dict['voxel_features'], batch_dict['voxel_coords']
+        
+        # voxel_features2 = np.array(voxel_features.half().cpu().numpy())
+        # voxel_features2.tofile('./voxel_features.bin')
+        
+        # voxel_coords2 = np.array(voxel_coords.cpu().numpy())
+        # voxel_coords2.tofile('./voxel_coords.bin')
+        
+        # print(voxel_features)
+        # print(voxel_coords)
+        # print(voxel_features.shape)
+        
+        # print(self.sparse_shape)
+        
         batch_size = batch_dict['batch_size']
         input_sp_tensor = spconv.SparseConvTensor(
             features=voxel_features,
@@ -285,6 +298,14 @@ class VoxelResBackBone8x(nn.Module):
                 'x_conv4': x_conv4,
             }
         })
+        
+        
+        # print(input_sp_tensor.shape)
+        # print(x_conv1.dense().shape)
+        # print(x_conv2.dense().shape)
+        # print(x_conv3.dense().shape)
+        # print(x_conv4.dense().shape)
+        # print(out.dense().shape)
 
         batch_dict.update({
             'multi_scale_3d_strides': {
