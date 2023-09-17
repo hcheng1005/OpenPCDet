@@ -149,8 +149,10 @@ def main():
 
     if(1): 
         post_model = post_model.cuda()
+        post_model.half()
     
         rpn_input = torch.load("spatial_features.tensor")
+        rpn_input = rpn_input.half()
         # onnx_output =  post_model.forward(rpn_input)
         # torch.save(onnx_output, "onnx_output.tensor")
         

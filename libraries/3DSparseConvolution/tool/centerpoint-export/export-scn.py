@@ -53,26 +53,26 @@ if __name__ == "__main__":
     model = funcs.layer_fusion(model)
     model.half().cuda().eval()
     
-    # 
-    voxels2 = torch.tensor(np.fromfile('/root/autodl-tmp/code/Lidar_AI_Solution/CUDA-CenterPoint/src/voxel_features.bin', dtype=np.float16).reshape([36368, 4])).cuda()
-    coors2 = torch.tensor(np.fromfile('/root/autodl-tmp/code/Lidar_AI_Solution/CUDA-CenterPoint/src/voxel_coords.bin', dtype=np.float32).reshape([36368, 4]).astype(dtype=np.int32)).cuda()
+    # voxels = torch.tensor(np.fromfile('/root/autodl-tmp/code/Lidar_AI_Solution/CUDA-CenterPoint/src/voxel_features.bin', dtype=np.float16).reshape([36368, 4])).cuda()
+    # coors = torch.tensor(np.fromfile('/root/autodl-tmp/code/Lidar_AI_Solution/CUDA-CenterPoint/src/voxel_coords.bin', dtype=np.float32).reshape([36368, 4]).astype(dtype=np.int32)).cuda()
     
     voxels = torch.zeros(1, args.in_channel).half().cuda()
     coors  = torch.zeros(1, 4).int().cuda()
+    
     batch_size  = 1
     
-    batch_dict = {}
-    batch_dict['voxel_features'] = voxels2
-    batch_dict['voxel_coords'] = coors2
-    batch_dict['batch_size'] = batch_size
-    output_ = model(batch_dict)
+    # batch_dict = {}
+    # batch_dict['voxel_features'] = voxels
+    # batch_dict['voxel_coords'] = coors
+    # batch_dict['batch_size'] = batch_size
+    # output_ = model(batch_dict)
     
-    print(output_.keys())
-    encoded_spconv_tensor = batch_dict['encoded_spconv_tensor']
-    spatial_features = encoded_spconv_tensor.dense()
-    N, C, D, H, W = spatial_features.shape
-    spatial_features = spatial_features.view(N, C * D, H, W)
-    print(sum(sum(sum(spatial_features))))
+    # print(output_.keys())
+    # encoded_spconv_tensor = batch_dict['encoded_spconv_tensor']
+    # spatial_features = encoded_spconv_tensor.dense()
+    # N, C, D, H, W = spatial_features.shape
+    # spatial_features = spatial_features.view(N, C * D, H, W)
+    # print(sum(sum(sum(spatial_features))))
     # print(spatial_features)
                 
-    exptool.export_onnx(model, voxels2, coors2, batch_size, spatial_shape, args.save_onnx, args.save_tensor)
+    exptool.export_onnx(model, voxels, coors, batch_size, spatial_shape, args.save_onnx, args.save_tensor)

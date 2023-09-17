@@ -90,18 +90,6 @@ def symbolic_sparse_convolution(self, ilayer, y, x):
         append_initializer(self.weight.data, f"spconv{ilayer}.weight"),
     ]
     
-    # output_size[1] = self.out_channels
-    # inputs = [
-    #     get_tensor_id(x), 
-    #     append_initializer(self.weight.data.permute(4, 0, 1, 2, 3), f"spconv{ilayer}.weight"),
-    # ]
-    
-    # output_size[1] = self.out_channels
-    # inputs = [
-    #     get_tensor_id(x), 
-    #     append_initializer(self.weight.data.permute(4, 0, 1, 2, 3), f"spconv{ilayer}.weight"),
-    # ]
-
     if self.bias is not None:
         inputs.append(append_initializer(self.bias.data, f"spconv{ilayer}.bias"))
         
@@ -168,16 +156,6 @@ def node_sparse_conv_tensor_dense(self, ilayer, y):
     register_tensor(y)
     print(f"   --> ToDense{ilayer}[{self.spatial_shape}][{list(y.size())}] -> Input {get_tensor_id(self)}, Output {get_tensor_id(y)}")
     
-    # nodes.append(
-    #     helper.make_node(
-    #         "ScatterDense", [get_tensor_id(self)], [get_tensor_id(y)], f"scatter{ilayer}",
-    #         input_spatial_shape = self.spatial_shape,
-    #         format              = "xyz",
-    #         output_shape        = y.size()
-    #     )
-    # )
-    
-    # format = "xyz"
     format = "zyx"
     nodes.append(
         helper.make_node(
@@ -255,7 +233,6 @@ def make_model_forward_hook(self, inverse_indices=False):
             voxel_features, coors, self.sparse_shape, batch_size
         )
         
-        print(input_sp_tensor)
         x = self.conv_input(input_sp_tensor)
         
         x_conv1 = self.conv1(x)
@@ -263,8 +240,6 @@ def make_model_forward_hook(self, inverse_indices=False):
         x_conv3 = self.conv3(x_conv2)
         x_conv4 = self.conv4(x_conv3)
 
-        # for detection head
-        # [200, 176, 5] -> [200, 176, 2]
         out = self.conv_out(x_conv4)
         spatial_features = out.dense()
         
@@ -272,26 +247,9 @@ def make_model_forward_hook(self, inverse_indices=False):
         # spatial_features = spatial_features.permute(0, 1, 2, 4, 3)
         spatial_features = spatial_features.reshape(N, C * Z, Y, X)
         
-        # N, C, D, H, W = spatial_features.shape        
-        # spatial_features = spatial_features.reshape(N, C * D, H, W)
-            
         return spatial_features
     
     return impl
-
-
-def inverse_model(model : nn.Module):
-    # change index xyz to zyx
-    model.sparse_shape = model.sparse_shape[::-1]
-    for name, module in model.named_modules():
-        if isinstance(module, spconv.conv.SparseConvolution):
-            # (xyz) I, O
-            module.weight.data = module.weight.data.permute(2, 1, 0, 3, 4).contiguous()
-            module.padding = module.padding[::-1]
-            module.stride = module.stride[::-1]
-            module.dilation = module.dilation[::-1]
-            module.kernel_size = module.kernel_size[::-1]
-            module.output_padding = module.output_padding[::-1]
             
             
 def export_onnx(model, voxels, coors, batch_size, spatial_shape, save_onnx, save_tensor):
@@ -301,22 +259,7 @@ def export_onnx(model, voxels, coors, batch_size, spatial_shape, save_onnx, save
     tensor_map = {}
     nodes = []
     initializers = []
-    
-    # spatial_shape = model.sparse_shape
-    # spatial_shape = spatial_shape[::-1]
-    # coors = coors[:, [0, 3, 2, 1]]
-    # inverse_model(model)
-    
-    # print("spatial_shape: ", spatial_shape)
-    
-    # for i, layers in enumerate(model.encoder_layers):
-    #     m0, m1 = layers[0], layers[1]
-    #     # @!!!! Warning~  the first subm layer's indice_key is subm1
-    #     m0.conv1.indice_key = f"subm{i+1}"
-    #     m0.conv2.indice_key = f"subm{i+1}"
-    #     m1.conv1.indice_key = f"subm{i+1}"
-    #     m1.conv2.indice_key = f"subm{i+1}"
-    
+        
     model.forward = make_model_forward_hook(model, True)
 
     print("Tracing model inference...")
@@ -334,7 +277,7 @@ def export_onnx(model, voxels, coors, batch_size, spatial_shape, save_onnx, save
 
         enable_trace = False
         
-        print(sum(sum(sum(y))))
+        # print(sum(sum(sum(y))))
 
     if save_tensor is not None:
         print("> Do save tensor, The purpose of this operation is to verify the inference result of C++")

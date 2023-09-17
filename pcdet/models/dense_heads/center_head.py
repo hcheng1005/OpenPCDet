@@ -408,48 +408,48 @@ class CenterHead(nn.Module):
             roi_labels[bs_idx, :num_boxes] = pred_dicts[bs_idx]['pred_labels']
         return rois, roi_scores, roi_labels
 
-    def forward(self, data_dict):
-        spatial_features_2d = data_dict['spatial_features_2d']
-        x = self.shared_conv(spatial_features_2d)
-
-        pred_dicts = []
-        for head in self.heads_list:
-            pred_dicts.append(head(x))
-        
-        #  训练模式下开始分配gt与预测框
-        if self.training:
-            target_dict = self.assign_targets(
-                data_dict['gt_boxes'], feature_map_size=spatial_features_2d.size()[2:],
-                feature_map_stride=data_dict.get('spatial_features_2d_strides', None)
-            )
-            self.forward_ret_dict['target_dicts'] = target_dict
-
-        data_dict["pred_dicts"] = pred_dicts
-        self.forward_ret_dict['pred_dicts'] = pred_dicts
-
-        if not self.training or self.predict_boxes_when_training:
-            # 解码，生成最后的bbox  
-            pred_dicts = self.generate_predicted_boxes(data_dict['batch_size'], pred_dicts)
-
-            if self.predict_boxes_when_training:
-                rois, roi_scores, roi_labels = self.reorder_rois_for_refining(data_dict['batch_size'], pred_dicts)
-                data_dict['rois'] = rois
-                data_dict['roi_scores'] = roi_scores
-                data_dict['roi_labels'] = roi_labels
-                data_dict['has_class_labels'] = True
-            else:
-                data_dict['final_box_dicts'] = pred_dicts
-
-        return data_dict
-    
-    # def forward(self, spatial_features_2d):
-    #     # spatial_features_2d = data_dict['spatial_features_2d']
+    # def forward(self, data_dict):
+    #     spatial_features_2d = data_dict['spatial_features_2d']
     #     x = self.shared_conv(spatial_features_2d)
 
     #     pred_dicts = []
     #     for head in self.heads_list:
     #         pred_dicts.append(head(x))
- 
-    #     pred_dicts = self.generate_predicted_boxes(1, pred_dicts)
+        
+    #     #  训练模式下开始分配gt与预测框
+    #     if self.training:
+    #         target_dict = self.assign_targets(
+    #             data_dict['gt_boxes'], feature_map_size=spatial_features_2d.size()[2:],
+    #             feature_map_stride=data_dict.get('spatial_features_2d_strides', None)
+    #         )
+    #         self.forward_ret_dict['target_dicts'] = target_dict
 
-    #     return pred_dicts
+    #     data_dict["pred_dicts"] = pred_dicts
+    #     self.forward_ret_dict['pred_dicts'] = pred_dicts
+
+    #     if not self.training or self.predict_boxes_when_training:
+    #         # 解码，生成最后的bbox  
+    #         pred_dicts = self.generate_predicted_boxes(data_dict['batch_size'], pred_dicts)
+
+    #         if self.predict_boxes_when_training:
+    #             rois, roi_scores, roi_labels = self.reorder_rois_for_refining(data_dict['batch_size'], pred_dicts)
+    #             data_dict['rois'] = rois
+    #             data_dict['roi_scores'] = roi_scores
+    #             data_dict['roi_labels'] = roi_labels
+    #             data_dict['has_class_labels'] = True
+    #         else:
+    #             data_dict['final_box_dicts'] = pred_dicts
+
+    #     return data_dict
+    
+    def forward(self, spatial_features_2d):
+        # spatial_features_2d = data_dict['spatial_features_2d']
+        x = self.shared_conv(spatial_features_2d)
+
+        pred_dicts = []
+        for head in self.heads_list:
+            pred_dicts.append(head(x))
+ 
+        pred_dicts = self.generate_predicted_boxes(1, pred_dicts)
+
+        return pred_dicts

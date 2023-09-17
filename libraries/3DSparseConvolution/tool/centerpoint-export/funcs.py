@@ -39,30 +39,6 @@ def load_scn_backbone_checkpoint(model, file):
     model.load_state_dict(new_ckpt)
     return model
 
-def layer_fusion(model):
-    def set_attr_by_path(m, path, newval):
-        def set_attr_by_array(parent, arr):
-            if len(arr) == 1: 
-                setattr(parent, arr[0], newval)
-                return parent
-            parent = getattr(parent, arr[0])
-            return set_attr_by_array(parent, arr[1:])
-
-        return set_attr_by_array(m, path.split("."))
-
-    for name, module in model.named_modules():
-        if isinstance(module, SparseSequential):
-            if isinstance(module[0], SubMConv3d) or isinstance(module[0], SparseConv3d):
-                c, b, r = [module[i] for i in range(3)]
-                fuse_bn(c, b)
-                c.act_type = tv.gemm.Activation.ReLU
-                set_attr_by_path(model, name, c)
-        elif isinstance(module, SparseBasicBlock):
-            fuse_sparse_basic_block(module, is_fuse_relu= True, is_fuse_bn= True)
-        elif isinstance(module, torch.nn.ReLU): 
-            module.inplace = False
-    return model
-
 def fuse_bn_weights(conv_w_OKI, conv_b, bn_rm, bn_rv, bn_eps, bn_w, bn_b):
     NDim = conv_w_OKI.ndim - 2
     permute = [0, NDim+1] + [i+1 for i in range(NDim)]
@@ -87,12 +63,7 @@ def fuse_bn(conv, bn):
     Given a conv Module `A` and an batch_norm module `B`, returns a conv
     module `C` such that C(x) == B(A(x)) in inference mode.
     """
-    #assert(not (conv.training or bn.training)), "Fusion only for eval!"
-    # conv.weight, conv.bias = fuse_bn_weights(conv.weight.permute(4, 0, 1, 2, 3), conv.bias, bn.running_mean, bn.running_var, bn.eps, bn.weight, bn.bias)
-    # conv.weight.data = conv.weight.data.permute(1, 2, 3, 4, 0)
-    
-    # print(conv)
-    
+    #assert(not (conv.training or bn.training)), "Fusion only for eval!"    
     conv.weight, conv.bias = fuse_bn_weights(conv.weight, conv.bias, bn.running_mean, bn.running_var, bn.eps, bn.weight, bn.bias)
 
 
@@ -166,36 +137,6 @@ def layer_fusion_bn(model):
         elif isinstance(module, torch.nn.ReLU): 
             module.inplace = False
     return model
-
-
-# # export for orignal model
-# def layer_fusion_bn_relu(model : VoxelResBackBone8x):
-#     # fuse all conv
-#     for conv_name in ["conv_input", "conv2", "conv3", "conv4", "conv_out"]:
-#         conv_instance = getattr(model, conv_name)
-#         print(conv_name)
-#         print(conv_instance)
-        
-#         if conv_name != "conv_input" and conv_name != "conv_out" :
-#             c, b, r = [conv_instance[0][i] for i in range(3)]
-#         else:
-#             c, b, r = [conv_instance[i] for i in range(3)]
-#         fuse_bn(c, b)
-#         c.act_type = tv.gemm.Activation.ReLU
-        
-#         if len(conv_instance) == 3:
-#             new_conv = c
-#         else:
-#             new_conv = SparseSequential(
-#                 *([c] + [conv_instance[i] for i in range(3, len(conv_instance))])
-#             )
-#         setattr(model, conv_name, new_conv)
-
-#     # fuse all SparseBasicBlock
-#     for name, block in model.named_modules():
-#         if isinstance(block, SparseBasicBlock):
-#             fuse_sparse_basic_block(block, is_fuse_relu= True, is_fuse_bn= True)
-#     return model
 
 def layer_fusion(model):
     def set_attr_by_path(m, path, newval):
