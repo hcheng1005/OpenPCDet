@@ -65,12 +65,10 @@ class PillarVFE(VFETemplate):
         assert len(self.num_filters) > 0
         num_filters = [num_point_features] + list(self.num_filters)
         
-        print("num_filters:", num_filters)
-
         pfn_layers = []
         for i in range(len(num_filters) - 1):
             in_filters = num_filters[i]
-            print("in_filters", in_filters)
+            # print("in_filters", in_filters)
             out_filters = num_filters[i + 1]
             pfn_layers.append(
                 PFNLayer(in_filters, out_filters, self.use_norm, last_layer=(i >= len(num_filters) - 2))
@@ -115,6 +113,8 @@ class PillarVFE(VFETemplate):
             points_dist = torch.norm(voxel_features[:, :, :3], 2, 2, keepdim=True)
             features.append(points_dist)
         features = torch.cat(features, dim=-1)
+        
+        print('features shape', features.shape)
 
         voxel_count = features.shape[1]
         mask = self.get_paddings_indicator(voxel_num_points, voxel_count, axis=0)

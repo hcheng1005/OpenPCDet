@@ -26,7 +26,7 @@ from pcdet.models import build_network, load_data_to_gpu
 from pcdet.datasets import DatasetTemplate
 from pcdet.config import cfg, cfg_from_yaml_file
 
-# from exporter_paramters import export_paramters as export_paramters
+from exporter_paramters import export_paramters as export_paramters
 from simplifier_nus_multpp_onnx import simplify_preprocess, simplify_postprocess
 
 import math
@@ -120,7 +120,7 @@ def parse_config():
     data_path="/media/charles/ShareDisk/00myDataSet/nuScenes/v1.0-mini/sweeps/LIDAR_TOP/"
     
     parser = argparse.ArgumentParser(description='arg parser')
-    parser.add_argument('--cfg_file', type=str, default='cfgs/nuscenes_models/cbgs_pp_multihead_demo.yaml',
+    parser.add_argument('--cfg_file', type=str, default='cfgs/nuscenes_models/cbgs_pp_multihead.yaml',
                         help='specify the config for demo')
     parser.add_argument('--data_path', type=str, default=data_path,
                         help='specify the point cloud data file or directory')
@@ -135,14 +135,14 @@ def parse_config():
 
 def main():
     args, cfg = parse_config()
-    # export_paramters(cfg)
+    export_paramters(cfg)
     logger = common_utils.create_logger()
     logger.info('------ Convert OpenPCDet model for TensorRT ------')
     demo_dataset = DemoDataset(
         dataset_cfg=cfg.DATA_CONFIG, class_names=cfg.CLASS_NAMES, training=False,
         root_path=Path(args.data_path), ext=args.ext, logger=logger
     )
-
+    
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=demo_dataset)
     # model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=True)
     # model.to('cpu')
@@ -163,7 +163,7 @@ def main():
           device='cuda:0')
 
       dummy_voxel_idxs = torch.zeros(
-          (MAX_VOXELS, 5),
+          (MAX_VOXELS, 4),
           dtype=torch.int32,
           device='cuda:0')
 

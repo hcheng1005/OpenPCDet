@@ -102,6 +102,9 @@ def parse_config():
     cfg_file = "cfgs/nuscenes_models/cbgs_pp_multihead.yaml"
     ckpt = "ckpt/nuScenes/pp_multihead_nds5823_updated.pth"
     
+    # cfg_file = "cfgs/nuscenes_models/cbgs_voxel01_res3d_centerpoint.yaml"
+    # ckpt = "ckpt/nuScenes/cbgs_voxel01_centerpoint_nds_6454.pth"
+    
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--cfg_file', type=str, default=cfg_file,
                         help='specify the config for demo')
@@ -164,6 +167,9 @@ def main():
     # 加载模型
     model = build_network(model_cfg=cfg.MODEL, num_class=len(
         cfg.CLASS_NAMES), dataset=demo_dataset)
+    
+    
+    print(model)
 
     # 导入模型数据
     model.load_params_from_file(filename=args.ckpt, logger=logger, to_cpu=False)
@@ -217,7 +223,7 @@ def main():
                 millis = int(round(time.time() * 1000))
                 logger.info(f'Visualized sample index: \t{idx + 1}')
                  
-                print(data_dict.keys())
+                # print(data_dict.keys())
                 
                 data_dict = demo_dataset.collate_batch([data_dict])
                 # print(data_dict.keys())

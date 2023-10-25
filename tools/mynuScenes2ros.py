@@ -397,17 +397,18 @@ def translate_boxes_to_open3d_instance(gt_boxes):
     return lines, box3d
 
 
-def pub_3d_bbox(box_pub, pred_dicts, pred_labels):
+def pub_3d_bbox(box_pub, pred_dicts, pred_labels, pred_score):
     bboxes = MarkerArray()
 
     if isinstance(pred_dicts, torch.Tensor):
         pred_dicts = pred_dicts.cpu().numpy()
 
+    pred_score = pred_score.cpu().numpy()
     print("det numb is ", pred_dicts.shape[0])
     for i in range(pred_dicts.shape[0]):
         # line_set, box3d = translate_boxes_to_open3d_instance(pred_dicts[i])
 
-        if pred_labels[i] < 3:
+        if pred_labels[i] < 3 and pred_score[i] > 0.2:
 
             marker = Marker()
             marker.id = i
@@ -435,6 +436,11 @@ def pub_3d_bbox(box_pub, pred_dicts, pred_labels):
             marker.pose.position.x = pred_dicts[i][0]
             marker.pose.position.y = pred_dicts[i][1]
             marker.pose.position.z = pred_dicts[i][2]
+            
+            # print(pred_score[i])
+            marker.text = str(pred_score[i])
+            
+            # print(pred_score[i], marker.text )
 
             bboxes.markers.append(marker)
 
@@ -548,9 +554,12 @@ def main():
 
             # 获取该场景的first token
             cur_sample_info = nusc.get('sample', scene['first_sample_token'])
+            print(cur_sample_info)
 
             # 连续读取该scenes下的所有frame
             while cur_sample_info['next'] != "":
+                print(cur_sample_info['next'])
+                
                 path_ = nusc.get_sample_data_path(
                     cur_sample_info['data'][test_sersor])
                 # print(path_)
@@ -599,7 +608,7 @@ def main():
                 pub_img.publish(ros_img)
 
                 pub_3d_bbox(
-                    box_pub, pred_dicts[0]['pred_boxes'], pred_dicts[0]['pred_labels'])
+                    box_pub, pred_dicts[0]['pred_boxes'], pred_dicts[0]['pred_labels'], pred_dicts[0]['pred_scores'])
 
                 rate.sleep()
 

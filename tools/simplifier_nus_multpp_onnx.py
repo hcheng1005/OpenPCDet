@@ -17,6 +17,9 @@ import onnx
 import numpy as np
 import onnx_graphsurgeon as gs
 
+# output_name = ['cls', 'reg', 'height', 'size', 'angle', 'velo']
+output_name = ['cls', 'box']
+
 @gs.Graph.register()
 def replace_with_clip(self, inputs, outputs):
     for inp in inputs:
@@ -26,8 +29,8 @@ def replace_with_clip(self, inputs, outputs):
         out.inputs.clear()
 
     op_attrs = dict()
-    op_attrs["dense_shape"] = np.array([496,432])
-
+    # op_attrs["dense_shape"] = np.array([496,432])
+    op_attrs["dense_shape"] = np.array([512,512]) # FOR NUSCENES
     return self.layer(name="PPScatter_0", op="PPScatterPlugin", inputs=inputs, outputs=outputs, attrs=op_attrs)
 
 def loop_node(graph, current_node, loop_time=0):
@@ -40,24 +43,21 @@ def simplify_postprocess(onnx_model):
   print("Use onnx_graphsurgeon to adjust postprocessing part in the onnx...")
   graph = gs.import_onnx(onnx_model)
 
-  output_01 = gs.Variable(name="11", dtype=np.float32)
-  output_02 = gs.Variable(name="12", dtype=np.float32)
-  output_03 = gs.Variable(name="13", dtype=np.float32)
-  output_04 = gs.Variable(name="14", dtype=np.float32)
-  output_05 = gs.Variable(name="15", dtype=np.float32)
-  output_06 = gs.Variable(name="16", dtype=np.float32)
-  output_011 = gs.Variable(name="21", dtype=np.float32)
-  output_021 = gs.Variable(name="22", dtype=np.float32)
-  output_031 = gs.Variable(name="23", dtype=np.float32)
-  output_041 = gs.Variable(name="24", dtype=np.float32)
-  output_051 = gs.Variable(name="25", dtype=np.float32)
-  output_061 = gs.Variable(name="26", dtype=np.float32)
-
+  output_new = []
+  
+  for i in range(6):
+    if i== 0 or i == 3:
+       output_new.append(gs.Variable(name=(output_name[0] + str(i)), dtype=np.float32, shape=(1, 2, 128, 128)))
+       output_new.append(gs.Variable(name=(output_name[1] + str(i)), dtype=np.float32, shape=(1, 20, 128, 128)))
+    else:
+        output_new.append(gs.Variable(name=(output_name[0] + str(i)), dtype=np.float32, shape=(1, 8, 128, 128)))
+        output_new.append(gs.Variable(name=(output_name[1] + str(i)), dtype=np.float32, shape=(1, 40, 128, 128)))
+       
+      
   tmap = graph.tensors()
   new_inputs = [tmap["voxels"], tmap["voxel_idxs"], tmap["voxel_num"]]
-  new_outputs = [output_01, output_02, output_03,output_04, output_05, output_06,
-                 output_011, output_021, output_031,output_041, output_051, output_061]
-
+  new_outputs = output_new
+  
   for inp in graph.inputs:
     if inp not in new_inputs:
       inp.outputs.clear()
@@ -106,13 +106,20 @@ def simplify_postprocess(onnx_model):
   
   first_node_after_relu = [node for node in graph.nodes if len(node.inputs) != 0 and len(first_node_after_concat.outputs) != 0 and node.inputs[0] == first_node_after_concat.outputs[0]]
   # print('first_node_after_concat \n', first_node_after_relu)
-  # print(len(first_node_after_relu))
+  print(len(first_node_after_relu))
 
-  for i in range(len(first_node_after_relu)):
-    transpose_node = loop_node(graph, first_node_after_relu[i], 2)
-    # print('transpose_node \n', transpose_node)
-    assert transpose_node.op == "Conv"
-    transpose_node.outputs = [new_outputs[i]] # 重新设定模型输出节点与位置
+  # for i in range(len(first_node_after_relu)):
+  #   transpose_node = loop_node(graph, first_node_after_relu[i], 2)
+  #   # print('transpose_node \n', transpose_node)
+  #   assert transpose_node.op == "Conv"
+  #   transpose_node.outputs = [new_outputs[i]] # 重新设定模型输出节点与位置
+  
+  for i in range(6):
+    transpose_node = loop_node(graph, first_node_after_relu[i*6], 2)
+    transpose_node.outputs = [new_outputs[2*i]]
+    
+    transpose_node = loop_node(graph, first_node_after_relu[i*6 + 1], 3)
+    transpose_node.outputs = [new_outputs[2*i + 1]]
 
   graph.inputs = new_inputs
   graph.outputs = new_outputs
@@ -126,14 +133,13 @@ def simplify_preprocess(onnx_model):
   graph = gs.import_onnx(onnx_model)
 
   tmap = graph.tensors()
-  # print(tmap)
   MAX_VOXELS = tmap["voxels"].shape[0]
 
   # voxels: [V, P, C']
   # V is the maximum number of voxels per frame
   # P is the maximum number of points per voxel
   # C' is the number of channels(features) per point in voxels.
-  input_new = gs.Variable(name="voxels", dtype=np.float32, shape=(MAX_VOXELS, 32, 10))
+  input_new = gs.Variable(name="voxels", dtype=np.float32, shape=(MAX_VOXELS, 32, 11))
 
   # voxel_idxs: [V, 4]
   # V is the maximum number of voxels per frame
@@ -169,9 +175,12 @@ def simplify_preprocess(onnx_model):
 
   #just keep some layers between inputs and outputs as below
   graph.inputs = [first_node_pillarvfe.inputs[0] , X, Y]
-  graph.outputs = [tmap["11"], tmap["12"], tmap["13"],tmap["14"], tmap["15"], tmap["16"],
-                   tmap["21"], tmap["22"], tmap["23"],tmap["24"], tmap["25"], tmap["26"]]
-
+  
+  graph.outputs = []
+  for i in range(6):
+    for j in range(2):
+       graph.outputs.append(tmap[(output_name[j] + str(i))])
+       
   graph.cleanup()
 
   #Rename the first tensor for the first layer 

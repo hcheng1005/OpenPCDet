@@ -93,12 +93,12 @@ def symbolic_sparse_convolution(self, ilayer, y, x):
     if self.bias is not None:
         inputs.append(append_initializer(self.bias.data, f"spconv{ilayer}.bias"))
         
-    act_type_name = {
-        tv.gemm.Activation.ReLU      : "ReLU",
-        tv.gemm.Activation.None_     : "None",
-        tv.gemm.Activation.Sigmoid   : "Sigmoid",
-        tv.gemm.Activation.LeakyReLU : "LeakyReLU"
-    }
+    # act_type_name = {
+    #     tv.gemm.Activation.ReLU      : "ReLU",
+    #     tv.gemm.Activation.None_     : "None",
+    #     tv.gemm.Activation.Sigmoid   : "Sigmoid",
+    #     tv.gemm.Activation.LeakyReLU : "LeakyReLU"
+    # }
 
     output_bound = 200000
     if hasattr(self, "output_bound"):
@@ -123,7 +123,7 @@ def symbolic_sparse_convolution(self, ilayer, y, x):
             groups = self.groups,
             subm = self.subm,
             rulebook = self.indice_key,
-            activation = act_type_name[self.act_type],
+            activation = getattr(self, "act_type", "None"),
             input_shape  = x.features.shape,
             output_shape = y.features.shape
         )
