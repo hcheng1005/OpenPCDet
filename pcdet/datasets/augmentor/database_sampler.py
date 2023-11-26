@@ -186,7 +186,7 @@ class DataBaseSampler(object):
         paste_mask = -255 * np.ones(image.shape[:2], dtype=np.int)
         fg_mask = np.zeros(image.shape[:2], dtype=np.int)
         overlap_mask = np.zeros(image.shape[:2], dtype=np.int)
-        depth_mask = np.zeros((*image.shape[:2], 2), dtype=np.float)
+        depth_mask = np.zeros((*image.shape[:2], 2), dtype=np.float64)
         points_2d, depth_2d = data_dict['calib'].lidar_to_img(data_dict['points'][:,:3])
         points_2d[:,0] = np.clip(points_2d[:,0], a_min=0, a_max=image.shape[1]-1)
         points_2d[:,1] = np.clip(points_2d[:,1], a_min=0, a_max=image.shape[0]-1)

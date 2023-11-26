@@ -60,10 +60,20 @@ class DemoDataset(DatasetTemplate):
 
 
 def parse_config():
-    data_path = "/media/charles/ShareDisk/00myDataSet/nuScenes/v1.0-mini/sweeps/LIDAR_TOP"
-    cfg_ = 'cfgs/nuscenes_models/cbgs_voxel01_res3d_centerpoint.yaml'
-    ckpt_ = 'ckpt/nuScenes/cbgs_voxel01_centerpoint_nds_6454.pth'
+    # data_path = "/media/charles/ShareDisk/00myDataSet/nuScenes/v1.0-mini/sweeps/LIDAR_TOP"
+    # cfg_ = 'cfgs/nuscenes_models/cbgs_voxel01_res3d_centerpoint.yaml'
+    # ckpt_ = 'ckpt/nuScenes/cbgs_voxel01_centerpoint_nds_6454.pth'
 
+    # transFusion
+    data_path="/root/code/data/nuscenes/sweeps/LIDAR_TOP/"
+    cfg_ = 'cfgs/nuscenes_models/transfusion_lidar.yaml'
+    ckpt_ = 'ckpt/cbgs_transfusion_lidar.pth'
+    
+    # # # BEVFusion
+    # data_path="/root/code/data/nuscenes/sweeps/LIDAR_TOP/"
+    # cfg_ = 'cfgs/nuscenes_models/bevfusion.yaml'
+    # ckpt_ = 'ckpt/cbgs_bevfusion.pth'
+    
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--cfg_file', type=str, default=cfg_,
                         help='specify the config for demo')
