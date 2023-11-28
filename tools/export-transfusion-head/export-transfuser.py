@@ -20,17 +20,13 @@
 # DEALINGS IN THE SOFTWARE.
 
 import sys; sys.path.insert(0, "./")
-
-
+import os
 import copy
-
-from pcdet.utils import common_utils
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import argparse
-import os
 
 from torch.nn.init import kaiming_normal_
 
@@ -45,7 +41,6 @@ from pcdet.models.dense_heads import TransFusionHead
 
 import collections
 
-
 from pathlib import Path
 import numpy as np
 import glob
@@ -57,48 +52,52 @@ from onnxsim import simplify
 
 import onnxruntime as rt
 
-# Assuming you use opset18
-# from onnxscript.onnx_opset import opset14 as op
 
-# custom_opset = onnxscript.values.Opset(domain="torch.onnx", version=14)
+# Ported from
+# https://github.com/microsoft/onnxscript/blob/6b1b81700b4523f31d8c6d3321e5d8ef5d42b764/onnxscript/function_libs/torch_aten/ops/core.py#L6097
+# NOTE: Supporting aten::unflatten before opset13 needs helper function to adjust ONNX op changes in Concat, Slice, ...
 
-# def unflatten_symbolic(g, input, *, out=None):
-#     return g.op("unflatten", input)
+def unflatten(g, input, dim, unflattened_size):
+    
+    input_dim = torch.onnx.symbolic_helper._get_tensor_rank(input)
+    
+    # dim could be negative
+    input_dim = g.op("Constant", value_t=torch.tensor([input_dim], dtype=torch.int64))
+    dim = g.op("Add", input_dim, dim)
+    dim = g.op("Mod", dim, input_dim)
 
-# torch.onnx.register_custom_op_symbolic('aten::unflatten', unflatten_symbolic, 14)
+    input_size = g.op("Shape", input)
 
-# # Registering custom operation for unflatten
-# @onnxscript.script(custom_opset)
-# def aten_unflatten(self, dim, sizes):
-#     """unflatten(Tensor(a) self, int dim, SymInt[] sizes) -> Tensor(a)"""
+    head_start_idx = g.op("Constant", value_t=torch.tensor([0], dtype=torch.int64))
+    head_end_idx = g.op(
+        "Reshape", dim, g.op("Constant", value_t=torch.tensor([1], dtype=torch.int64))
+    )
+    head_part_rank = g.op("Slice", input_size, head_start_idx, head_end_idx)
 
-#     self_size = op.Shape(self)
+    dim_plus_one = g.op(
+        "Add", dim, g.op("Constant", value_t=torch.tensor([1], dtype=torch.int64))
+    )
+    tail_start_idx = g.op(
+        "Reshape",
+        dim_plus_one,
+        g.op("Constant", value_t=torch.tensor([1], dtype=torch.int64)),
+    )
+    tail_end_idx = g.op(
+        "Constant", value_t=torch.tensor([9223372036854775807], dtype=torch.int64)
+    )
+    tail_part_rank = g.op("Slice", input_size, tail_start_idx, tail_end_idx)
 
-#     if dim < 0:
-#         # PyTorch accepts negative dim as reversed counting
-#         self_rank = op.Size(self_size)
-#         dim = self_rank + dim
+    final_shape = g.op(
+        "Concat", head_part_rank, unflattened_size, tail_part_rank, axis_i=0
+    )
 
-#     head_start_idx = op.Constant(value_ints=[0])
-#     head_end_idx = op.Reshape(dim, op.Constant(value_ints=[1]))
-#     head_part_rank = op.Slice(self_size, head_start_idx, head_end_idx)
+    return torch.onnx.symbolic_helper._reshape_helper(g, input, final_shape)
 
-#     tail_start_idx = op.Reshape(dim + 1, op.Constant(value_ints=[1]))
-#     tail_end_idx = op.Constant(value_ints=[9223372036854775807])
-#     tail_part_rank = op.Slice(self_size, tail_start_idx, tail_end_idx)
-
-#     final_shape = op.Concat(head_part_rank, sizes, tail_part_rank, axis=0)
-
-#     return op.Reshape(self, final_shape)
-
-# def custom_unflatten(g, *dim, **shape):
-#     return g.onnxscript_op(aten_unflatten, *dim, **shape) 
-
-# torch.onnx.register_custom_op_symbolic(
-#     symbolic_name="aten::unflatten",
-#     symbolic_fn=custom_unflatten,
-#     opset_version=14,
-# )
+torch.onnx.register_custom_op_symbolic(
+    symbolic_name="aten::unflatten",
+    symbolic_fn=unflatten,
+    opset_version=14,
+)
 
 '''
 names: 
@@ -341,8 +340,6 @@ class SubclassBEVFusionFuserDecoder(nn.Module):
         return self.get_bboxes(pred_dict)
                 
         
-
-
 def parse_config():
     # transFusion
     data_path="/root/code/data/nuscenes/sweeps/LIDAR_TOP/"
@@ -455,10 +452,10 @@ if __name__ == "__main__":
         
     model.load_state_dict(new_ckpt)
     model.cuda()
-    print(model)
+    # print(model)
 
-    lidar_features  = torch.randn(1, 512, 180, 180).cuda()
-    # lidar_features = torch.load("./myTensor.pt")
+    # lidar_features  = torch.randn(1, 512, 180, 180).cuda()
+    lidar_features = torch.load("./myTensor.pt")
 
     with torch.no_grad():
         torch.onnx.export(model, lidar_features, "./transfusion_head.onnx", 
@@ -466,7 +463,6 @@ if __name__ == "__main__":
             input_names=["lidar"],
             output_names=["score", "rot", "dim", "reg", "height", "vel"],
             do_constant_folding=True
-            # dynamic_axes={"hm": {0: "batch"},"rot": {0: "batch"},"dim": {0: "batch"},"reg": {0: "batch"},"height": {0: "batch"},"vel": {0: "batch"}, "camera": {0: "batch"}, "lidar": {0: "batch"}}
         )
     
     model = onnx.load("./transfusion_head.onnx")
@@ -479,11 +475,9 @@ if __name__ == "__main__":
     print("Export to ONNX is complete. 🤗")
     
     # # onnx test
-    # # onnx test
     print("Start test ONNX Model ...")
     sess = rt.InferenceSession('./transfusion_head2.onnx')
     input_name = sess.get_inputs()[0].name  
-    # output_name = sess.get_outputs()[1].name
 
     output_name = []
     for idx in range(len(sess.get_outputs())):
