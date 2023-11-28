@@ -12,6 +12,11 @@ from ...utils import loss_utils
 from ..model_utils import centernet_utils
 
 
+'''
+names: 
+description: Briefly describe the function of your function
+return {*}
+'''
 class SeparateHead_Transfusion(nn.Module):
     def __init__(self, input_channels, head_channels, kernel_size, sep_head_dict, init_bias=-2.19, use_bias=False):
         super().__init__()
@@ -99,7 +104,10 @@ class TransFusionHead(nn.Module):
         layers = []
         layers.append(BasicBlock2D(hidden_channel,hidden_channel, kernel_size=3,padding=1,bias=bias))
         layers.append(nn.Conv2d(in_channels=hidden_channel,out_channels=num_class,kernel_size=3,padding=1))
+        
+        # heatmap特征卷积网络
         self.heatmap_head = nn.Sequential(*layers)
+        # class类型卷积网络
         self.class_encoding = nn.Conv1d(num_class, hidden_channel, 1)
 
         # transformer decoder layers for object query with LiDAR feature
@@ -149,17 +157,32 @@ class TransFusionHead(nn.Module):
                 m.momentum = self.bn_momentum
 
     def predict(self, inputs):
-        batch_size = inputs.shape[0]
-        lidar_feat = self.shared_conv(inputs)
+        # print(f"input feature shape: {inputs.shape}")
+        # input feature shape: torch.Size([1, 512, 180, 180])
 
-        lidar_feat_flatten = lidar_feat.view(
-            batch_size, lidar_feat.shape[1], -1
-        )
+        batch_size = inputs.shape[0]
+        
+        # 首先进过一层卷积
+        lidar_feat = self.shared_conv(inputs)
+        
+        # print(f"lidar_feat shape: {lidar_feat.shape}")
+        # lidar_feat shape: torch.Size([1, 128, 180, 180])
+        
+        lidar_feat_flatten = lidar_feat.view(batch_size, lidar_feat.shape[1], -1)
+        
+        # print(f"lidar_feat_flatten shape: {lidar_feat_flatten.shape}")
+        # lidar_feat_flatten shape: torch.Size([1, 128, 32400])
+
         bev_pos = self.bev_pos.repeat(batch_size, 1, 1).to(lidar_feat.device)
 
         # query initialization
+        # 通过 Conv+BN+ReLU 生成heatmap feature
         dense_heatmap = self.heatmap_head(lidar_feat)
         heatmap = dense_heatmap.detach().sigmoid()
+        
+        # print(f"heatmap shape: {heatmap.shape}")
+        # heatmap shape: torch.Size([1, 10, 180, 180])
+        
         padding = self.nms_kernel_size // 2
         local_max = torch.zeros_like(heatmap)
         local_max_inner = F.max_pool2d(
@@ -178,9 +201,14 @@ class TransFusionHead(nn.Module):
         heatmap = heatmap.view(batch_size, heatmap.shape[1], -1)
  
         # top num_proposals among all classes
+        # 获取top k个feature
         top_proposals = heatmap.view(batch_size, -1).argsort(dim=-1, descending=True)[
             ..., : self.num_proposals
         ]
+        
+        # print(f"top_proposals shape: {top_proposals.shape}")
+        # heatmap shape: torch.Size([1, 200])
+
         top_proposals_class = top_proposals // heatmap.shape[-1]
         top_proposals_index = top_proposals % heatmap.shape[-1]
         query_feat = lidar_feat_flatten.gather(
@@ -192,7 +220,9 @@ class TransFusionHead(nn.Module):
         # add category embedding
         one_hot = F.one_hot(top_proposals_class, num_classes=self.num_classes).permute(0, 2, 1)
         
-        query_cat_encoding = self.class_encoding(one_hot.float())
+        query_cat_encoding = self.class_encoding(one_hot.float()) # 此处是一个全连接层
+        
+        # 特征直接相加（不是拼接）
         query_feat += query_cat_encoding
 
         query_pos = bev_pos.gather(
@@ -203,12 +233,24 @@ class TransFusionHead(nn.Module):
         query_pos = query_pos.flip(dims=[-1])
         bev_pos = bev_pos.flip(dims=[-1])
 
+        # print(f"query_feat shape: {query_feat.shape}")
+        # print(f"lidar_feat_flatten shape: {lidar_feat_flatten.shape}")
+        # print(f"query_pos shape: {query_pos.shape}")
+        # print(f"bev_pos shape: {bev_pos.shape}")
+        '''
+        query_feat shape: torch.Size([1, 128, 200])
+        lidar_feat_flatten shape: torch.Size([1, 128, 32400])
+        query_pos shape: torch.Size([1, 200, 2])
+        bev_pos shape: torch.Size([1, 32400, 2])
+        '''
         query_feat = self.decoder(
             query_feat, lidar_feat_flatten, query_pos, bev_pos
         )
+        
+        # 最后将transformer输出特征query_feat过预测头
+        # HEAD_ORDER: ['center', 'height', 'dim', 'rot', 'vel']
         res_layer = self.prediction_head(query_feat)
         res_layer["center"] = res_layer["center"] + query_pos.permute(0, 2, 1)
-
         res_layer["query_heatmap_score"] = heatmap.gather(
             index=top_proposals_index[:, None, :].expand(-1, self.num_classes, -1),
             dim=-1,
@@ -218,15 +260,18 @@ class TransFusionHead(nn.Module):
         return res_layer
 
     def forward(self, batch_dict):
+        # BACKBONE_2D模块的输出
         feats = batch_dict['spatial_features_2d']
         res = self.predict(feats)
         if not self.training:
-            bboxes = self.get_bboxes(res)
+            bboxes = self.get_bboxes(res) # 解码并输出bboxes
             batch_dict['final_box_dicts'] = bboxes
         else:
             gt_boxes = batch_dict['gt_boxes']
             gt_bboxes_3d = gt_boxes[...,:-1]
             gt_labels_3d =  gt_boxes[...,-1].long() - 1
+            
+            # 计算loss
             loss, tb_dict = self.loss(gt_bboxes_3d, gt_labels_3d, res)
             batch_dict['loss'] = loss
             batch_dict['tb_dict'] = tb_dict
@@ -339,6 +384,16 @@ class TransFusionHead(nn.Module):
         mean_iou = ious[pos_inds].sum() / max(len(pos_inds), 1)
         return (labels[None], label_weights[None], bbox_targets[None], bbox_weights[None], int(pos_inds.shape[0]), float(mean_iou), heatmap[None])
 
+    '''
+    names: 
+    description: Briefly describe the function of your function
+    param {*} self
+    param {*} gt_bboxes_3d
+    param {*} gt_labels_3d
+    param {*} pred_dicts
+    param {object} kwargs
+    return {*}
+    '''
     def loss(self, gt_bboxes_3d, gt_labels_3d, pred_dicts, **kwargs):
 
         labels, label_weights, bbox_targets, bbox_weights, num_pos, matched_ious, heatmap = \
@@ -467,7 +522,8 @@ class TransFusionHead(nn.Module):
         batch_vel = None
         if "vel" in preds_dicts:
             batch_vel = preds_dicts["vel"]
-
+    
+        # detbox 解码
         ret_dict = self.decode_bbox(
             batch_score, batch_rot, batch_dim,
             batch_center, batch_height, batch_vel,

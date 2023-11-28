@@ -36,16 +36,16 @@ import numpy as np
 
 if __name__ == "__main__":
     
-    ckpt_file = "/home/charles/myCode/OpenPCDet/tools/ckpt/kitti/checkpoint_epoch_40.pth"
+    ckpt_file = "/home/charles/myCode/OpenPCDet/tools/ckpt/nuScenes/cbgs_voxel01_centerpoint_nds_6454.pth"
     parser = argparse.ArgumentParser(description="Export scn to onnx file")
-    parser.add_argument("--in-channel", type=int, default=4, help="SCN num of input channels")
+    parser.add_argument("--in-channel", type=int, default=5, help="SCN num of input channels")
     parser.add_argument("--ckpt", type=str, default=ckpt_file, help="SCN Checkpoint (scn backbone checkpoint)")
     parser.add_argument("--input", type=str, default=None, help="input pickle data, random if there have no input")
     parser.add_argument("--save-onnx", type=str, default="centerpoint.scn.onnx", help="output onnx")
     parser.add_argument("--save-tensor", type=str, default=None, help="Save input/output tensor to file. The purpose of this operation is to verify the inference result of c++")
     args = parser.parse_args()
     
-    spatial_shape = np.array( [1408, 1600, 40])
+    spatial_shape = np.array( [1024, 1024, 80])
     model = VoxelResBackBone8x(args.in_channel, spatial_shape)
     
     if args.ckpt:
@@ -53,26 +53,7 @@ if __name__ == "__main__":
     model = funcs.layer_fusion(model)
     model.half().cuda().eval()
     
-    # voxels = torch.tensor(np.fromfile('/root/autodl-tmp/code/Lidar_AI_Solution/CUDA-CenterPoint/src/voxel_features.bin', dtype=np.float16).reshape([36368, 4])).cuda()
-    # coors = torch.tensor(np.fromfile('/root/autodl-tmp/code/Lidar_AI_Solution/CUDA-CenterPoint/src/voxel_coords.bin', dtype=np.float32).reshape([36368, 4]).astype(dtype=np.int32)).cuda()
-    
     voxels = torch.zeros(1, args.in_channel).half().cuda()
     coors  = torch.zeros(1, 4).int().cuda()
-    
-    batch_size  = 1
-    
-    # batch_dict = {}
-    # batch_dict['voxel_features'] = voxels
-    # batch_dict['voxel_coords'] = coors
-    # batch_dict['batch_size'] = batch_size
-    # output_ = model(batch_dict)
-    
-    # print(output_.keys())
-    # encoded_spconv_tensor = batch_dict['encoded_spconv_tensor']
-    # spatial_features = encoded_spconv_tensor.dense()
-    # N, C, D, H, W = spatial_features.shape
-    # spatial_features = spatial_features.view(N, C * D, H, W)
-    # print(sum(sum(sum(spatial_features))))
-    # print(spatial_features)
-                
+    batch_size  = 1                
     exptool.export_onnx(model, voxels, coors, batch_size, spatial_shape, args.save_onnx, args.save_tensor)

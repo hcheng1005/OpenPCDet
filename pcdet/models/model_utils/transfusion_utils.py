@@ -6,7 +6,7 @@ def clip_sigmoid(x, eps=1e-4):
     y = torch.clamp(x.sigmoid_(), min=eps, max=1 - eps)
     return y
 
-
+# 可学习的position embedding模块
 class PositionEmbeddingLearned(nn.Module):
     """
     Absolute pos embedding, learned.
@@ -26,6 +26,11 @@ class PositionEmbeddingLearned(nn.Module):
         return position_embedding
 
 
+'''
+names: TransformerDecoderLayer
+description: Briefly describe the function of your function
+return {*}
+'''
 class TransformerDecoderLayer(nn.Module):
     def __init__(self, d_model, nhead, dim_feedforward=2048, dropout=0.1, activation="relu",
                  self_posembed=None, cross_posembed=None, cross_only=False):
@@ -64,6 +69,18 @@ class TransformerDecoderLayer(nn.Module):
     def with_pos_embed(self, tensor, pos_embed):
         return tensor if pos_embed is None else tensor + pos_embed
 
+    '''
+    names: 
+    description: TransformerDecoderLayer的前向过程
+    param {*} self
+    param {*} query
+    param {*} key
+    param {*} query_pos
+    param {*} key_pos
+    param {*} key_padding_mask
+    param {*} attn_mask
+    return {*}
+    '''
     def forward(self, query, key, query_pos, key_pos, key_padding_mask=None, attn_mask=None):
         # NxCxP to PxNxC
         if self.self_posembed is not None:

@@ -34,6 +34,10 @@ def load_scn_backbone_checkpoint(model, file):
     for key, val in ckpt.items():
         if key.startswith("backbone_3d."):
             newkey = key[key.find(".")+1:]
+            # print(val)
+            if len(val.shape) == 5:
+                N, C, D, H, W = val.shape
+                val = val.view(W,N, C, D, H,)
             new_ckpt[newkey] = val
 
     model.load_state_dict(new_ckpt)
@@ -99,7 +103,7 @@ def new_sparse_basic_block_forward(self):
 def fuse_sparse_basic_block(self, is_fuse_bn = False, is_fuse_relu=True):
     self.forward = new_sparse_basic_block_forward(self)
     if is_fuse_relu == True:
-        self.conv1.act_type = tv.gemm.Activation.ReLU 
+        self.conv1.act_type = "ReLU" #tv.gemm.Activation.ReLU 
 
     if is_fuse_bn == True:
         fuse_bn(self.conv1, self.bn1)
@@ -154,7 +158,8 @@ def layer_fusion(model):
             if isinstance(module[0], SubMConv3d) or isinstance(module[0], SparseConv3d):
                 c, b, r = [module[i] for i in range(3)]
                 fuse_bn(c, b)
-                c.act_type = tv.gemm.Activation.ReLU
+                # c.act_type = tv.gemm.Activation.ReLU
+                c.act_type = "ReLU"
                 set_attr_by_path(model, name, c)
         elif isinstance(module, SparseBasicBlock):
             fuse_sparse_basic_block(module, is_fuse_relu= True, is_fuse_bn= True)
