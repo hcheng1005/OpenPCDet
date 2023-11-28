@@ -1,23 +1,3 @@
-# SPDX-FileCopyrightText: Copyright (c) 2023 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: MIT
-#
-# Permission is hereby granted, free of charge, to any person obtaining a
-# copy of this software and associated documentation files (the "Software"),
-# to deal in the Software without restriction, including without limitation
-# the rights to use, copy, modify, merge, publish, distribute, sublicense,
-# and/or sell copies of the Software, and to permit persons to whom the
-# Software is furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-# THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
-# FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
-# DEALINGS IN THE SOFTWARE.
 
 import sys; sys.path.insert(0, "./CenterPoint")
 
@@ -90,15 +70,6 @@ def simplify_model(model_path):
 
 def parse_config():    
     data_path="/data/wz/0.bin"
-    # cfg_ = '../output/cfgs/kitti_models/centerpoint_res/default/centerpoint_res.yaml'
-    # ckpt_ = '../output/cfgs/kitti_models/centerpoint_res/default/ckpt/checkpoint_epoch_40.pth'
-    
-    # cfg_ = "/data/chenghao/mycode/OpenPCDet/tools/cfgs/nuscenes_models/cbgs_voxel01_res3d_centerpoint.yaml"
-    # ckpt_ = "/data/chenghao/mycode/OpenPCDet/tools/ckpt/nuScenes/cbgs_voxel01_centerpoint_nds_6454.pth"
-    
-    # cfg_ = "cfgs/wuz_models/ownwz_voxel_centerpoint_10cls_1020.yaml"
-    # ckpt_ = "latest_model.pth"
-    
     cfg_ = "ckpt/wuzhneg/model_ct_1018/ownwz_centerpoint_10cls_1018.yaml"
     ckpt_ = "ckpt/wuzhneg/model_ct_1018/checkpoint_epoch_80.pth"
     
@@ -115,47 +86,6 @@ def parse_config():
     return args, cfg
 
 
-# class CenterPointVoxelNet_Post(nn.Module):
-#     def __init__(self, model):
-#         super(CenterPointVoxelNet_Post, self).__init__()
-#         self.model = model
-        
-#     def forward(self, x):
-        
-#         # 此处可以认为是把模型裁剪了，只保留原生模型的neck和head部分
-#         # 因此需要注意，此处模型的输入x应该是原生模型backbone的输出（也就是3d稀疏卷积后的特征数据）
-#         x = self.model.backbone_2d(x)
-#         x = self.model.dense_head.shared_conv(x)
-        
-#         # 多个检测任务（检测头）分离（此处应该是有6个）
-#         pred = [ task(x) for task in self.model.dense_head.heads_list]
-        
-#         # return pred
-#         return pred[0]['center'], pred[0]['center_z'], pred[0]['dim'], pred[0]['rot'], pred[0]['hm']
-    
-# class CenterPointVoxelNet_Post(nn.Module):
-#     def __init__(self, model):
-#         super(CenterPointVoxelNet_Post, self).__init__()
-#         self.model = model
-#         assert( len(self.model.dense_head.heads_list) == 6 )
-
-#     def forward(self, x):
-        
-#         # 此处可以认为是把模型裁剪了，只保留原生模型的neck和head部分
-#         # 因此需要注意，此处模型的输入x应该是原生模型backbone的输出（也就是3d稀疏卷积后的特征数据）
-#         x = self.model.backbone_2d(x)
-#         x = self.model.dense_head.shared_conv(x)
-        
-#         # 多个检测任务（检测头）分离（此处应该是有6个）
-#         pred = [ task(x) for task in self.model.dense_head.heads_list ]
-
-#         return pred[0]['center'], pred[0]['center_z'], pred[0]['dim'], pred[0]['rot'], pred[0]['vel'], pred[0]['hm'], \
-#                 pred[1]['center'], pred[1]['center_z'], pred[1]['dim'], pred[1]['rot'], pred[1]['vel'], pred[1]['hm'], \
-#                 pred[2]['center'], pred[2]['center_z'], pred[2]['dim'], pred[2]['rot'], pred[2]['vel'], pred[2]['hm'], \
-#                 pred[3]['center'], pred[3]['center_z'], pred[3]['dim'], pred[3]['rot'], pred[3]['vel'], pred[3]['hm'], \
-#                 pred[4]['center'], pred[4]['center_z'], pred[4]['dim'], pred[4]['rot'], pred[4]['vel'], pred[4]['hm'], \
-#                 pred[5]['center'], pred[5]['center_z'], pred[5]['dim'], pred[5]['rot'], pred[5]['vel'], pred[5]['hm']
-
 # For WuZheng
 class CenterPointVoxelNet_Post(nn.Module):
     def __init__(self, model):
@@ -164,9 +94,6 @@ class CenterPointVoxelNet_Post(nn.Module):
         assert( len(self.model.dense_head.heads_list) == 6 )
 
     def forward(self, x):
-        
-        # 此处可以认为是把模型裁剪了，只保留原生模型的neck和head部分
-        # 因此需要注意，此处模型的输入x应该是原生模型backbone的输出（也就是3d稀疏卷积后的特征数据）
         x = self.model.backbone_2d(x)
         x = self.model.dense_head.shared_conv(x)
         
@@ -207,32 +134,15 @@ def main():
     if(1): 
         post_model = post_model.cuda()
         post_model.half()
-    
-        # rpn_input = torch.load("spatial_features_10.tensor") # nuscenes
-
-        # onnx_output =  post_model.forward(rpn_input)
-        # torch.save(onnx_output, "onnx_output.tensor")
         
-        # 调用onnx-export进行模型导出
-        # rpn_input = data_dict['spatial_features'], 
-        # torch.onnx.export(post_model, rpn_input, "tmp.onnx",
-        #     export_params=True, opset_version=11, do_constant_folding=True,
-        #     keep_initializers_as_inputs=False, input_names = ['input'],
-        #     output_names = ['reg_0', 'height_0', 'dim_0', 'rot_0',  'hm_0',
-        #                     'reg_1', 'height_1', 'dim_1', 'rot_1',  'hm_1',
-        #                     'reg_2', 'height_2', 'dim_2', 'rot_2', 'vel_2', 'hm_2',
-        #                     'reg_3', 'height_3', 'dim_3', 'rot_3', 'vel_3', 'hm_3',
-        #                     'reg_4', 'height_4', 'dim_4', 'rot_4', 'vel_4', 'hm_4',
-        #                     'reg_5', 'height_5', 'dim_5', 'rot_5', 'vel_5', 'hm_5'],
-        #     )
-        
+        # spatial_features size = [1, 256, 64, 128]
         rpn_input =torch.zeros((1, 256, 64, 128), dtype=torch.float16, device='cuda:0') # WUZHENG
         
         torch.onnx.export(post_model, rpn_input, "tmp.onnx",
             export_params=True, opset_version=11, do_constant_folding=True,
             keep_initializers_as_inputs=False, input_names = ['input'],
-            output_names = ['reg_0', 'height_0', 'dim_0', 'rot_0',  'hm_0',
-                            'reg_1', 'height_1', 'dim_1', 'rot_1',  'hm_1',
+            output_names = ['reg_0', 'height_0', 'dim_0', 'rot_0', 'hm_0',
+                            'reg_1', 'height_1', 'dim_1', 'rot_1', 'hm_1',
                             'reg_2', 'height_2', 'dim_2', 'rot_2', 'hm_2',
                             'reg_3', 'height_3', 'dim_3', 'rot_3', 'hm_3',
                             'reg_4', 'height_4', 'dim_4', 'rot_4', 'hm_4',

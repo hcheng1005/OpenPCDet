@@ -74,7 +74,7 @@ def parse_config():
                         help='specify the config for demo')
     parser.add_argument('--data_path', type=str, default='demo_data',
                         help='specify the point cloud data file or directory')
-    parser.add_argument('--ckpt', type=str, default='./pointpillar_7728.pth', help='specify the pretrained model')
+    parser.add_argument('--ckpt', type=str, default='ckpt/kitti/pointpillar_7728.pth', help='specify the pretrained model')
     parser.add_argument('--ext', type=str, default='.bin', help='specify the extension of your point cloud data file')
 
     args = parser.parse_args()

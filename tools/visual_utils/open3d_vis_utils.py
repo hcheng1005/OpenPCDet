@@ -72,6 +72,7 @@ def draw_scenes(vis, points, gt_boxes=None, ref_boxes=None, ref_labels=None, ref
     vis.poll_events()
     vis.update_renderer()
     vis.clear_geometries()
+    # vis.run()
 
 
 

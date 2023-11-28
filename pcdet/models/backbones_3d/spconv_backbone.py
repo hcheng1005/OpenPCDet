@@ -262,6 +262,11 @@ class VoxelResBackBone8x(nn.Module):
         # voxel_coords2 = np.array(voxel_coords.cpu().numpy())
         # voxel_coords2.tofile('./voxel_coords.bin')
         
+        # for i in range(voxel_features.shape[0]):
+        #     if voxel_coords2[i][1] == 15 and (voxel_coords2[i][2] >= 515 and voxel_coords2[i][2] <= 516) and voxel_coords2[i][3] >= 550:
+        #         print(voxel_coords2[i,:]) 
+        #         print(voxel_features2[i,:])
+        
         # print(voxel_features)
         # print(voxel_coords)
         # print(voxel_features.shape)
