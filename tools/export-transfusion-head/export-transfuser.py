@@ -21,13 +21,6 @@
 
 import sys; sys.path.insert(0, "./")
 
-# from torchpack.utils.config import configs
-# from mmcv.cnn import fuse_conv_bn
-# from mmcv import Config
-# from mmcv.runner.fp16_utils import auto_fp16
-# from mmdet3d.models import build_model
-# from mmdet3d.utils import recursive_eval
-# from mmcv.runner import wrap_fp16_model
 
 import copy
 
@@ -56,6 +49,56 @@ import collections
 from pathlib import Path
 import numpy as np
 import glob
+
+import onnx
+import onnxscript
+import torch
+from onnxsim import simplify
+
+import onnxruntime as rt
+
+# Assuming you use opset18
+# from onnxscript.onnx_opset import opset14 as op
+
+# custom_opset = onnxscript.values.Opset(domain="torch.onnx", version=14)
+
+# def unflatten_symbolic(g, input, *, out=None):
+#     return g.op("unflatten", input)
+
+# torch.onnx.register_custom_op_symbolic('aten::unflatten', unflatten_symbolic, 14)
+
+# # Registering custom operation for unflatten
+# @onnxscript.script(custom_opset)
+# def aten_unflatten(self, dim, sizes):
+#     """unflatten(Tensor(a) self, int dim, SymInt[] sizes) -> Tensor(a)"""
+
+#     self_size = op.Shape(self)
+
+#     if dim < 0:
+#         # PyTorch accepts negative dim as reversed counting
+#         self_rank = op.Size(self_size)
+#         dim = self_rank + dim
+
+#     head_start_idx = op.Constant(value_ints=[0])
+#     head_end_idx = op.Reshape(dim, op.Constant(value_ints=[1]))
+#     head_part_rank = op.Slice(self_size, head_start_idx, head_end_idx)
+
+#     tail_start_idx = op.Reshape(dim + 1, op.Constant(value_ints=[1]))
+#     tail_end_idx = op.Constant(value_ints=[9223372036854775807])
+#     tail_part_rank = op.Slice(self_size, tail_start_idx, tail_end_idx)
+
+#     final_shape = op.Concat(head_part_rank, sizes, tail_part_rank, axis=0)
+
+#     return op.Reshape(self, final_shape)
+
+# def custom_unflatten(g, *dim, **shape):
+#     return g.onnxscript_op(aten_unflatten, *dim, **shape) 
+
+# torch.onnx.register_custom_op_symbolic(
+#     symbolic_name="aten::unflatten",
+#     symbolic_fn=custom_unflatten,
+#     opset_version=14,
+# )
 
 '''
 names: 
@@ -133,17 +176,6 @@ class SubclassBEVFusionFuserDecoder(nn.Module):
         ffn_channel = self.model_cfg.FFN_CHANNEL
         bias = self.model_cfg.get('USE_BIAS_BEFORE_NORM', False)
 
-        # loss_cls = self.model_cfg.LOSS_CONFIG.LOSS_CLS
-        # self.use_sigmoid_cls = loss_cls.get("use_sigmoid", False)
-        # if not self.use_sigmoid_cls:
-        #     self.num_classes += 1
-        # self.loss_cls = loss_utils.SigmoidFocalClassificationLoss(gamma=loss_cls.gamma,alpha=loss_cls.alpha)
-        # self.loss_cls_weight = self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS['cls_weight']
-        # self.loss_bbox = loss_utils.L1Loss()
-        # self.loss_bbox_weight = self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS['bbox_weight']
-        # self.loss_heatmap = loss_utils.GaussianFocalLoss()
-        # self.loss_heatmap_weight = self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS['hm_weight']
-
         self.code_size = 10
 
         # a shared convolution
@@ -218,33 +250,13 @@ class SubclassBEVFusionFuserDecoder(nn.Module):
         padding = self.nms_kernel_size // 2
         local_max = torch.zeros_like(heatmap)
         # equals to nms radius = voxel_size * out_size_factor * kenel_size
-        local_max_inner = F.max_pool2d(
-            heatmap, kernel_size=self.nms_kernel_size, stride=1, padding=0
-        )
+        local_max_inner = F.max_pool2d(heatmap, kernel_size=self.nms_kernel_size, stride=1, padding=0)
         local_max[:, :, padding:(-padding), padding:(-padding)] = local_max_inner
-        ## for Pedestrian & Traffic_cone in nuScenes
-        if self.test_cfg["dataset"] == "nuScenes":
-            # local_max[
-            #     :,
-            #     8,
-            # ] = F.max_pool2d(heatmap[:, 8], kernel_size=1, stride=1, padding=0)
-            # local_max[
-            #     :,
-            #     9,
-            # ] = F.max_pool2d(heatmap[:, 9], kernel_size=1, stride=1, padding=0)
-            local_max[:, 8] = heatmap[:, 8]
-            local_max[:, 9] = heatmap[:, 9]
-        elif self.test_cfg["dataset"] == "Waymo":  # for Pedestrian & Cyclist in Waymo
-            # local_max[
-            #     :,
-            #     1,
-            # ] = F.max_pool2d(heatmap[:, 1], kernel_size=1, stride=1, padding=0)
-            # local_max[
-            #     :,
-            #     2,
-            # ] = F.max_pool2d(heatmap[:, 2], kernel_size=1, stride=1, padding=0)
-            local_max[:, 1] = heatmap[:, 1]
-            local_max[:, 2] = heatmap[:, 2]
+        
+        local_max[:, 8] = heatmap[:, 8]
+        local_max[:, 9] = heatmap[:, 9]
+        # local_max[ :, 8, ] = F.max_pool2d(heatmap[:, 8], kernel_size=1, stride=1, padding=0)
+        # local_max[ :, 9, ] = F.max_pool2d(heatmap[:, 9], kernel_size=1, stride=1, padding=0)
         heatmap = heatmap * (heatmap == local_max)
         heatmap = heatmap.view(batch_size, heatmap.shape[1], -1)
 
@@ -252,7 +264,10 @@ class SubclassBEVFusionFuserDecoder(nn.Module):
         # top_proposals = heatmap.view(batch_size, -1).argsort(dim=-1, descending=True)[
         #     ..., : self.num_proposals
         # ]
-        top_proposals = heatmap.view(batch_size, -1).topk(k=self.num_proposals, dim=-1, largest=True)[1]
+        top_proposals = heatmap.view(batch_size, -1).argsort(dim=-1, descending=True)[
+            ..., : self.num_proposals
+        ]
+                
         top_proposals_class = top_proposals // heatmap.shape[-1]
         top_proposals_index = top_proposals % heatmap.shape[-1]
         query_feat = lidar_feat_flatten.gather(
@@ -265,7 +280,7 @@ class SubclassBEVFusionFuserDecoder(nn.Module):
 
         # add category embedding
         self.one_hot = F.one_hot(top_proposals_class, num_classes=self.num_classes).permute(
-            0, 2, 1)
+            0, 2, 1).float()
         # self.one_hot = classes_eye.index_select(0, top_proposals_class.view(-1))[None].permute(
         #     0, 2, 1
         # )
@@ -273,59 +288,29 @@ class SubclassBEVFusionFuserDecoder(nn.Module):
         query_feat += query_cat_encoding
 
         query_pos = bev_pos.gather(
-            index=top_proposals_index[:, None, :]
-            .permute(0, 2, 1)
-            .expand(-1, -1, bev_pos.shape[-1]),
+            index=top_proposals_index[:, None, :].permute(0, 2, 1).expand(-1, -1, bev_pos.shape[-1]),
             dim=1,
         )
 
-        #################################
-        # transformer decoder layer (LiDAR feature as K,V)
-        #################################
-        # ret_dicts = []
-        # for i in range(self.num_decoder_layers):
-        # prefix = "last_" if (i == self.num_decoder_layers - 1) else f"{i}head_"
-
-        # Transformer Decoder Layer
-        # :param query: B C Pq    :param query_pos: B Pq 3/6
+        query_pos = query_pos.flip(dims=[-1])
+        bev_pos = bev_pos.flip(dims=[-1])
+        
         query_feat = self.decoder(
             query_feat, lidar_feat_flatten, query_pos, bev_pos
         )
 
         # Prediction
-        res_layer = self.prediction_heads(query_feat)
+        res_layer = self.prediction_head(query_feat)
         res_layer["center"] = res_layer["center"] + query_pos.permute(0, 2, 1)
-        # first_res_layer = res_layer
-        # ret_dicts.append(res_layer)
-
-        # for next level positional embedding
-        # query_pos = res_layer["center"].detach().clone().permute(0, 2, 1)
-
-        #################################
-        # transformer decoder layer (img feature as K,V)
-        #################################
         res_layer["query_heatmap_score"] = heatmap.gather(
             index=top_proposals_index[:, None, :].expand(-1, self.num_classes, -1),
             dim=-1,
         )  # [bs, num_classes, num_proposals]
         res_layer["dense_heatmap"] = dense_heatmap
 
-        # # if self.auxiliary is False:
-        # #     # only return the results of last decoder layer
-        # #     return ret_dicts[-1]
-
-        # # return all the layer's results for auxiliary superivison
-        # new_res = {}
-        # for key in ret_dicts[0].keys():
-        #     if key not in ["dense_heatmap", "dense_heatmap_old", "query_heatmap_score"]:
-        #         new_res[key] = torch.cat(
-        #             [ret_dict[key] for ret_dict in ret_dicts], dim=-1
-        #         )
-        #     else:
-        #         new_res[key] = ret_dicts[0][key]
         return res_layer
 
-    def get_bboxes(self, preds_dict, one_hot):
+    def get_bboxes(self, preds_dict):
         """Generate bboxes from bbox head predictions.
         Args:
             preds_dicts (tuple[list[dict]]): Prediction results.
@@ -340,13 +325,6 @@ class SubclassBEVFusionFuserDecoder(nn.Module):
             self.query_labels, num_classes=self.num_classes
         ).permute(0, 2, 1)
         batch_score = batch_score * preds_dict["query_heatmap_score"] * one_hot
-        # batch_center = preds_dict["center"][..., -self.num_proposals :]
-        # batch_height = preds_dict["height"][..., -self.num_proposals :]
-        # batch_dim = preds_dict["dim"][..., -self.num_proposals :]
-        # batch_rot = preds_dict["rot"][..., -self.num_proposals :]
-        # batch_vel = None
-        # if "vel" in preds_dict:
-        #     batch_vel = preds_dict["vel"][..., -self.num_proposals :]
         batch_center = preds_dict["center"]
         batch_height = preds_dict["height"]
         batch_dim = preds_dict["dim"]
@@ -359,28 +337,8 @@ class SubclassBEVFusionFuserDecoder(nn.Module):
 
     # @auto_fp16(apply_to=("features",))
     def forward(self, features):
-        # if self.parent.fuser is not None:
-        #     x = self.parent.fuser(features)
-        # else:
-        #     assert len(features) == 1, features
-        #     x = features[0]
-
-        # batch_size = x.shape[0]
-        # x = self.parent.decoder["backbone"](x)
-        # x = self.parent.decoder["neck"](x)
-
-        # outputs = [{} for _ in range(batch_size)]
-        # for type, head in self.parent.heads.items():
-        #     if type == "object":
-        #         pred_dict = self.head_forward(head, x[0], self.classes_eye)
-        #         return self.get_bboxes(pred_dict, head.one_hot)
-        #     else:
-        #         raise ValueError(f"unsupported head: {type}")
-            
-        # return outputs  
-    
         pred_dict = self.head_forward(self, features)
-        # return self.get_bboxes(pred_dict, head.one_hot)
+        return self.get_bboxes(pred_dict)
                 
         
 
@@ -388,8 +346,8 @@ class SubclassBEVFusionFuserDecoder(nn.Module):
 def parse_config():
     # transFusion
     data_path="/root/code/data/nuscenes/sweeps/LIDAR_TOP/"
-    cfg_ = '../cfgs/nuscenes_models/transfusion_lidar.yaml'
-    ckpt_ = '../ckpt/cbgs_transfusion_lidar.pth'
+    cfg_ = './cfgs/nuscenes_models/transfusion_lidar.yaml'
+    ckpt_ = './ckpt/cbgs_transfusion_lidar.pth'
         
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--cfg_file', type=str, default=cfg_,
@@ -457,23 +415,6 @@ if __name__ == "__main__":
     
     args, cfg = parse_config()
     
-    # half_export = True
-    # if not os.path.exists(args.input):
-    #     camera_features = torch.randn(1, 80, 180, 180).cuda()
-    #     lidar_features  = torch.randn(1, 256, 180, 180).cuda()
-    # else:
-    #     camera_features, lidar_features = torch.load(args.input)
-    #     camera_features = camera_features.cuda()
-    #     lidar_features  = lidar_features.cuda()
-
-    # lidar_features  = torch.randn(1, 256, 180, 180).cuda()
-    
-    # os.makedirs(os.path.dirname(args.save_onnx), exist_ok=True)
-    # configs.load(args.config, recursive=True)
-    # cfg = Config(recursive_eval(configs), filename=args.config)
-
-    # cfg.model.train_cfg = None
-    
     logger = common_utils.create_logger()
     logger.info(
         '-----------------Quick Demo of OpenPCDet-------------------------')
@@ -492,9 +433,6 @@ if __name__ == "__main__":
             'depth_downsample_factor':demo_dataset.depth_downsample_factor
         }
             
-    model = build_network(model_cfg=cfg.MODEL, num_class=len(
-        cfg.CLASS_NAMES), dataset=demo_dataset)
-        
     model = SubclassBEVFusionFuserDecoder(
             model_cfg=cfg.MODEL.DENSE_HEAD,
             input_channels= 512,
@@ -507,8 +445,6 @@ if __name__ == "__main__":
         )
     
     checkpoint = torch.load(args.ckpt, map_location='cuda')["model_state"]
-    
-    # print(checkpoint["model_state"].keys())
     new_ckpt = collections.OrderedDict()
     for key, val in checkpoint.items():
         # print(key)
@@ -518,36 +454,42 @@ if __name__ == "__main__":
             new_ckpt[newkey] = val
         
     model.load_state_dict(new_ckpt)
-    
+    model.cuda()
     print(model)
-    
-    # model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES))
 
-    # if args.ckpt:
-    #   model = funcs.load_checkpoint(model, args.ckpt)
-
-    # # model = fuse_conv_bn(model)
-    # model = SubclassBEVFusionFuserDecoder(model).cuda()
-    # model.float()
-    
-    # lidar_features  = lidar_features.float()
-    lidar_features  = torch.randn(1, 128, 180, 180).cuda()
-    
-
-    # if half_export:
-    #     wrap_fp16_model(model)
-    #     camera_features = camera_features.float()
-    #     lidar_features  = lidar_features.float()
-    # else:
-    #     model.float()
-    #     camera_features = camera_features.float()
-    #     lidar_features  = lidar_features.float()
+    lidar_features  = torch.randn(1, 512, 180, 180).cuda()
+    # lidar_features = torch.load("./myTensor.pt")
 
     with torch.no_grad():
-        torch.onnx.export(model, lidar_features, "./transfusion_head.onnx", opset_version=14, 
-            input_names=["camera", "lidar"],
+        torch.onnx.export(model, lidar_features, "./transfusion_head.onnx", 
+            opset_version=14, 
+            input_names=["lidar"],
             output_names=["score", "rot", "dim", "reg", "height", "vel"],
+            do_constant_folding=True
             # dynamic_axes={"hm": {0: "batch"},"rot": {0: "batch"},"dim": {0: "batch"},"reg": {0: "batch"},"height": {0: "batch"},"vel": {0: "batch"}, "camera": {0: "batch"}, "lidar": {0: "batch"}}
         )
+    
+    model = onnx.load("./transfusion_head.onnx")
+    sim_model, check = simplify(model)
+    if not check:
+        print("[ERROR]:Simplify %s error!"% "tmp.onnx")
+    onnx.save(sim_model, "./transfusion_head2.onnx")
+    
     print(f"Save onnx to '{'transfusion_head.onnx'}'")
     print("Export to ONNX is complete. 🤗")
+    
+    # # onnx test
+    # # onnx test
+    print("Start test ONNX Model ...")
+    sess = rt.InferenceSession('./transfusion_head2.onnx')
+    input_name = sess.get_inputs()[0].name  
+    # output_name = sess.get_outputs()[1].name
+
+    output_name = []
+    for idx in range(len(sess.get_outputs())):
+        output_name.append(sess.get_outputs()[idx].name)
+
+    print(input_name, "\n", output_name)
+    pred_onnx = sess.run(input_feed = {input_name:lidar_features.detach().cpu().numpy()}, output_names = output_name) 
+    print(pred_onnx[2])
+
