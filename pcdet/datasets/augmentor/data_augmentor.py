@@ -5,7 +5,9 @@ from PIL import Image
 
 from ...utils import common_utils
 from . import augmentor_utils, database_sampler
-
+from skimage import transform
+import torch
+import torchvision
 
 class DataAugmentor(object):
     def __init__(self, root_path, augmentor_configs, class_names, logger=None):
@@ -289,7 +291,7 @@ class DataAugmentor(object):
 
         data_dict["camera_imgs"] = new_imgs
         return data_dict
-
+    
     def forward(self, data_dict):
         """
         Args:

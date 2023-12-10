@@ -28,7 +28,7 @@ class HeightCompression(nn.Module):
         batch_dict['spatial_features'] = spatial_features
         batch_dict['spatial_features_stride'] = batch_dict['encoded_spconv_tensor_stride']
         
-        spatial_features2 = np.array(spatial_features.cpu().numpy())
+        # spatial_features2 = np.array(spatial_features.cpu().numpy())
         # spatial_features2.tofile('./spatial_features.bin')
         
         # print(spatial_features)

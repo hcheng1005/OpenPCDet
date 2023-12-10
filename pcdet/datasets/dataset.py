@@ -319,7 +319,7 @@ class DatasetTemplate(torch_data.Dataset):
                     ret[key] = np.stack(val, axis=0)
             except:
                 print('Error in collate_batch: key=%s' % key)
-                raise TypeError
+                # raise TypeError
 
         ret['batch_size'] = batch_size * batch_size_ratio
         return ret

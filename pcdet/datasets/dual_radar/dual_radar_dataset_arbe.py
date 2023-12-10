@@ -8,6 +8,7 @@ from ...ops.roiaware_pool3d import roiaware_pool3d_utils
 from ...utils import box_utils, calibration_dual_radar, common_utils, object3d_dual_radar
 from ..dataset import DatasetTemplate
 
+from PIL import Image
 
 class DualradarDataset_ARBE(DatasetTemplate):
     def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None):
@@ -22,6 +23,14 @@ class DualradarDataset_ARBE(DatasetTemplate):
         super().__init__(
             dataset_cfg=dataset_cfg, class_names=class_names, training=training, root_path=root_path, logger=logger
         )
+        
+        self.camera_config = self.dataset_cfg.get('CAMERA_CONFIG', None)
+        if self.camera_config is not None:
+            self.use_camera = self.camera_config.get('USE_CAMERA', True)
+            self.camera_image_config = self.camera_config.IMAGE
+        else:
+            self.use_camera = False
+            
         self.split = self.dataset_cfg.DATA_SPLIT[self.mode]
         self.root_split_path = self.root_path / ('training' if self.split != 'test' else 'testing')
 
@@ -73,6 +82,54 @@ class DualradarDataset_ARBE(DatasetTemplate):
 
         return points_arbe
 
+    def get_image(self, idx, input_dict):
+        img_file = self.root_split_path / 'image' / ('%s.png' % idx)
+        assert img_file.exists()
+        
+        images = Image.open(img_file)
+        input_dict["camera_imgs"] = images
+        input_dict["ori_shape"] = images.size
+        
+        # resize and crop image
+        input_dict = self.crop_image(input_dict)
+        
+        return input_dict
+    
+    def crop_image(self, input_dict):
+        W, H = input_dict["ori_shape"]
+        imgs = input_dict["camera_imgs"]
+        img_process_infos = []
+        crop_images = []
+
+        if self.training == True:
+            fH, fW = self.camera_image_config.FINAL_DIM
+            resize_lim = self.camera_image_config.RESIZE_LIM_TRAIN
+            resize = np.random.uniform(*resize_lim)
+            resize_dims = (int(W * resize), int(H * resize))
+            newW, newH = resize_dims
+            crop_h = newH - fH
+            crop_w = int(np.random.uniform(0, max(0, newW - fW)))
+            crop = (crop_w, crop_h, crop_w + fW, crop_h + fH)
+        else:
+            fH, fW = self.camera_image_config.FINAL_DIM
+            resize_lim = self.camera_image_config.RESIZE_LIM_TEST
+            resize = np.mean(resize_lim)
+            resize_dims = (int(W * resize), int(H * resize))
+            newW, newH = resize_dims
+            crop_h = newH - fH
+            crop_w = int(max(0, newW - fW) / 2)
+            crop = (crop_w, crop_h, crop_w + fW, crop_h + fH)
+        
+        # reisze and crop image
+        imgs = imgs.resize(resize_dims)
+        imgs = imgs.crop(crop)
+        crop_images.append(imgs)
+        img_process_infos.append([resize, crop, False, 0])
+        
+        input_dict['img_process_infos'] = img_process_infos
+        input_dict['camera_imgs'] = crop_images
+        return input_dict
+    
     def get_image_shape(self, idx):
         img_file = self.root_split_path / 'image' / ('%s.png' % idx)
         assert img_file.exists()
@@ -444,6 +501,12 @@ class DualradarDataset_ARBE(DatasetTemplate):
             if road_plane is not None:
                 input_dict['road_plane'] = road_plane
 
+        # 使用图像进行多模态检测
+        # print(input_dict.keys())
+        if self.use_camera:
+            input_dict = self.get_image(sample_idx, input_dict)
+        
+        # print(input_dict.keys()) 
         data_dict = self.prepare_data(data_dict=input_dict)
 
         data_dict['image_shape'] = img_shape
@@ -461,21 +524,21 @@ def create_dual_radar_infos(dataset_cfg, class_names, data_path, save_path, work
 
     print('---------------Start to generate data infos---------------')
 
-    # dataset.set_split(train_split)
-    # dual_radar_infos_train = dataset.get_infos(num_workers=workers, has_label=True, count_inside_pts=True)
-    # with open(train_filename, 'wb') as f:
-    #     pickle.dump(dual_radar_infos_train, f)
-    # print('dual radar info train file is saved to %s' % train_filename)
+    dataset.set_split(train_split)
+    dual_radar_infos_train = dataset.get_infos(num_workers=workers, has_label=True, count_inside_pts=True)
+    with open(train_filename, 'wb') as f:
+        pickle.dump(dual_radar_infos_train, f)
+    print('dual radar info train file is saved to %s' % train_filename)
 
-    # dataset.set_split(val_split)
-    # dual_radar_infos_val = dataset.get_infos(num_workers=workers, has_label=True, count_inside_pts=True)
-    # with open(val_filename, 'wb') as f:
-    #     pickle.dump(dual_radar_infos_val, f)
-    # print('dual radar info val file is saved to %s' % val_filename)
+    dataset.set_split(val_split)
+    dual_radar_infos_val = dataset.get_infos(num_workers=workers, has_label=True, count_inside_pts=True)
+    with open(val_filename, 'wb') as f:
+        pickle.dump(dual_radar_infos_val, f)
+    print('dual radar info val file is saved to %s' % val_filename)
 
-    # with open(trainval_filename, 'wb') as f:
-    #     pickle.dump(dual_radar_infos_train + dual_radar_infos_val, f)
-    # print('dual radar info trainval file is saved to %s' % trainval_filename)
+    with open(trainval_filename, 'wb') as f:
+        pickle.dump(dual_radar_infos_train + dual_radar_infos_val, f)
+    print('dual radar info trainval file is saved to %s' % trainval_filename)
 
     dataset.set_split('test')
     dual_radar_infos_test = dataset.get_infos(num_workers=workers, has_label=False, count_inside_pts=False)
