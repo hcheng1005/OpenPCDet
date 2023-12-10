@@ -13,7 +13,7 @@ from ...utils import box_utils, common_utils, calibration_kitti
 from pcdet.datasets.kitti.kitti_object_eval_python import kitti_common
 
 class DataBaseSampler(object):
-    def __init__(self, root_path, sampler_cfg, class_names, logger=None):
+    def __init__(self, root_path, sampler_cfg, use_data_type, class_names, logger=None):
         self.root_path = root_path
         self.class_names = class_names
         self.sampler_cfg = sampler_cfg
@@ -27,15 +27,16 @@ class DataBaseSampler(object):
             self.db_infos[class_name] = []
 
         self.use_shared_memory = sampler_cfg.get('USE_SHARED_MEMORY', False)
+        self.use_data_type = use_data_type
 
         for db_info_path in sampler_cfg.DB_INFO_PATH:
             db_info_path = self.root_path.resolve() / db_info_path
-            if not db_info_path.exists():
-                assert len(sampler_cfg.DB_INFO_PATH) == 1
-                sampler_cfg.DB_INFO_PATH[0] = sampler_cfg.BACKUP_DB_INFO['DB_INFO_PATH']
-                sampler_cfg.DB_DATA_PATH[0] = sampler_cfg.BACKUP_DB_INFO['DB_DATA_PATH']
-                db_info_path = self.root_path.resolve() / sampler_cfg.DB_INFO_PATH[0]
-                sampler_cfg.NUM_POINT_FEATURES = sampler_cfg.BACKUP_DB_INFO['NUM_POINT_FEATURES']
+            # if not db_info_path.exists():
+            #     assert len(sampler_cfg.DB_INFO_PATH) == 1
+            #     sampler_cfg.DB_INFO_PATH[0] = sampler_cfg.BACKUP_DB_INFO['DB_INFO_PATH']
+            #     sampler_cfg.DB_DATA_PATH[0] = sampler_cfg.BACKUP_DB_INFO['DB_DATA_PATH']
+            #     db_info_path = self.root_path.resolve() / sampler_cfg.DB_INFO_PATH[0]
+            #     sampler_cfg.NUM_POINT_FEATURES = sampler_cfg.BACKUP_DB_INFO['NUM_POINT_FEATURES']
 
             with open(str(db_info_path), 'rb') as f:
                 infos = pickle.load(f)
@@ -398,7 +399,16 @@ class DataBaseSampler(object):
                     obj_points = np.fromfile(str(file_path), dtype=np.float64).reshape(-1, self.sampler_cfg.NUM_POINT_FEATURES)
 
             assert obj_points.shape[0] == info['num_points_in_gt']
-            obj_points[:, :3] += info['box3d_lidar'][:3].astype(np.float32)
+            # obj_points[:, :3] += info['box3d_lidar'][:3].astype(np.float32)
+            
+            if self.use_data_type == "lidar":
+                obj_points[:, :3] += info['box3d_lidar'][:3]#liuiln
+            elif self.use_data_type == "arbe":
+                obj_points[:, :3] += info['box3d_arbe'][:3]#liuiln
+            elif self.use_data_type == "ars548":
+                obj_points[:, :3] += info['box3d_ars'][:3]#liuiln
+            else:
+                obj_points[:, :3] += info['box3d_lidar'][:3].astype(np.float32)
 
             if self.sampler_cfg.get('USE_ROAD_PLANE', False):
                 # mv height
@@ -465,7 +475,14 @@ class DataBaseSampler(object):
             if int(sample_group['sample_num']) > 0:
                 sampled_dict = self.sample_with_fixed_number(class_name, sample_group)
 
-                sampled_boxes = np.stack([x['box3d_lidar'] for x in sampled_dict], axis=0).astype(np.float32)
+                if self.use_data_type == "lidar":
+                    sampled_boxes = np.stack([x['box3d_lidar'] for x in sampled_dict], axis=0).astype(np.float32)#liuiln
+                elif self.use_data_type == "arbe":
+                    sampled_boxes = np.stack([x['box3d_arbe'] for x in sampled_dict], axis=0).astype(np.float32)#liuiln
+                elif self.use_data_type == "ars548":
+                    sampled_boxes = np.stack([x['box3d_ars'] for x in sampled_dict], axis=0).astype(np.float32)#liuiln
+                else:
+                    sampled_boxes = np.stack([x['box3d_lidar'] for x in sampled_dict], axis=0).astype(np.float32)                    
 
                 assert not self.sampler_cfg.get('DATABASE_WITH_FAKELIDAR', False), 'Please use latest codes to generate GT_DATABASE'
 

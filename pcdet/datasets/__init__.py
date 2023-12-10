@@ -15,6 +15,11 @@ from .once.once_dataset import ONCEDataset
 from .custom.custom_dataset import CustomDataset
 from .ownwz.ownwz_dataset import OwnWZDataset
 
+from .dual_radar.dual_radar_dataset import DualradarDataset
+from .dual_radar.dual_radar_dataset_arbe import DualradarDataset_ARBE
+from .dual_radar.dual_radar_dataset_ars548 import DualradarDataset_ARS548
+
+
 __all__ = {
     'DatasetTemplate': DatasetTemplate,
     'KittiDataset': KittiDataset,
@@ -24,7 +29,11 @@ __all__ = {
     'LyftDataset': LyftDataset,
     'ONCEDataset': ONCEDataset,
     'CustomDataset': CustomDataset,
-    'OwnWZDataset': OwnWZDataset
+    'OwnWZDataset': OwnWZDataset,
+    'DualradarDataset': DualradarDataset,
+    #fangchange
+    'DualradarDataset_ARBE': DualradarDataset_ARBE,
+    'DualradarDataset_ARS548': DualradarDataset_ARS548
 }
 
 
@@ -54,14 +63,12 @@ class DistributedSampler(_DistributedSampler):
 def build_dataloader(dataset_cfg, class_names, batch_size, dist, root_path=None, workers=4, seed=None,
                      logger=None, training=True, merge_all_iters_to_one_epoch=False, total_epochs=0,
                      data_split_type = 'train'):
-
     dataset = __all__[dataset_cfg.DATASET](
         dataset_cfg=dataset_cfg,
         class_names=class_names,
         root_path=root_path,
         training=training,
         logger=logger,
-        data_split_type = data_split_type
     )
 
     if merge_all_iters_to_one_epoch:
