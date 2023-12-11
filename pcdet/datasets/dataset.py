@@ -205,6 +205,10 @@ class DatasetTemplate(torch_data.Dataset):
         if data_dict.get('points', None) is not None:
             data_dict = self.point_feature_encoder.forward(data_dict)
 
+        # 毫米波雷达点云数据编码
+        if data_dict.get('radar_points', None) is not None:
+            data_dict = self.point_feature_encoder.forward(data_dict)
+            
         data_dict = self.data_processor.forward(
             data_dict=data_dict
         )

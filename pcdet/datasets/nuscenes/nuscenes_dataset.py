@@ -233,12 +233,10 @@ class NuScenesDataset(DatasetTemplate):
     def __getitem__(self, index):
         if self._merge_all_iters_to_one_epoch:
             index = index % len(self.infos)
-
+            
         info = copy.deepcopy(self.infos[index])
-
-
         points = self.get_lidar_with_sweeps(index, max_sweeps=self.dataset_cfg.MAX_SWEEPS)
-
+        
         input_dict = {
             'points': points,
             'frame_id': Path(info['lidar_path']).stem,
@@ -255,9 +253,11 @@ class NuScenesDataset(DatasetTemplate):
                 'gt_names': info['gt_names'] if mask is None else info['gt_names'][mask],
                 'gt_boxes': info['gt_boxes'] if mask is None else info['gt_boxes'][mask]
             })
+        # 加入相机数据
         if self.use_camera:
             input_dict = self.load_camera_info(input_dict, info)
-            
+        
+        # 加入毫米波雷达点云数据
         if self.use_radar:
             input_dict = self.load_radar_info(input_dict, info)
 
