@@ -9,6 +9,7 @@ from ..utils import common_utils
 from .augmentor.data_augmentor import DataAugmentor
 from .processor.data_processor import DataProcessor
 from .processor.point_feature_encoder import PointFeatureEncoder
+from .processor.point_feature_encoder import RadarPointFeatureEncoder
 
 
 class DatasetTemplate(torch_data.Dataset):
@@ -23,14 +24,24 @@ class DatasetTemplate(torch_data.Dataset):
         if self.dataset_cfg is None or class_names is None:
             return
 
+
         self.point_cloud_range = np.array(self.dataset_cfg.POINT_CLOUD_RANGE, dtype=np.float32)
-        self.point_feature_encoder = PointFeatureEncoder(
+        
+        self.radar_point_feature_encoder = RadarPointFeatureEncoder(
             self.dataset_cfg.POINT_FEATURE_ENCODING,
             point_cloud_range=self.point_cloud_range
         )
+        
+        self.point_feature_encoder = PointFeatureEncoder(
+            self.dataset_cfg.POINT_FEATURE_ENCODING,
+            point_cloud_range=self.point_cloud_range
+        )        
+        
+        # 激光点云数据增强
         self.data_augmentor = DataAugmentor(
             self.root_path, self.dataset_cfg.DATA_AUGMENTOR, self.class_names, logger=self.logger
         ) if self.training else None
+        
         self.data_processor = DataProcessor(
             self.dataset_cfg.DATA_PROCESSOR, point_cloud_range=self.point_cloud_range,
             training=self.training, num_point_features=self.point_feature_encoder.num_point_features
@@ -207,12 +218,12 @@ class DatasetTemplate(torch_data.Dataset):
 
         # 毫米波雷达点云数据编码
         if data_dict.get('radar_points', None) is not None:
-            data_dict = self.point_feature_encoder.forward(data_dict)
-            
-        data_dict = self.data_processor.forward(
-            data_dict=data_dict
-        )
-
+            data_dict = self.radar_point_feature_encoder.forward(data_dict)
+        
+        # 数据处理：比如pointpillars的体柱化处理
+        # 新增毫米波的points_to_voxels
+        data_dict = self.data_processor.forward(data_dict=data_dict)
+        
         if self.training and len(data_dict['gt_boxes']) == 0:
             new_index = np.random.randint(self.__len__())
             return self.__getitem__(new_index)

@@ -26,6 +26,12 @@ class NuScenesDataset(DatasetTemplate):
             self.camera_image_config = self.camera_config.IMAGE
         else:
             self.use_camera = False
+            
+        self.radar_config = self.dataset_cfg.get('RADAR_CONFIG', None)
+        if self.radar_config is not None:
+            self.use_radar = self.radar_config.get('USE_RADAR', True)
+        else:
+            self.use_radar = False
 
         self.include_nuscenes_data(self.mode)
         if self.training and self.dataset_cfg.get('BALANCED_RESAMPLING', False):
@@ -213,15 +219,25 @@ class NuScenesDataset(DatasetTemplate):
 
     def load_radar_info(self, input_dict, info):
         input_dict["radar_paths"] = []
-        all_radar_points = []
+        all_radar_points = None
         for _, radar_info in info["radars"].items():
-            radar_path = radar_info["data_path"]
-            input_dict["radar_paths"].append(radar_path)
-            radarPointCloud_ = RadarPointCloud.from_file(radar_path)
+            radar_path = self.root_path / radar_info["data_path"]
+            input_dict["radar_paths"].append(str(radar_path))
+            radarPointCloud_ = RadarPointCloud.from_file(str(radar_path))
             radar_pc = radarPointCloud_.points # 只获取点云信息
-            all_radar_points.append(radar_pc)
-        
+            # print(radar_pc.shape) [D, N]，其中d是雷达数据维度=18，N是点云个数
+            if all_radar_points is None:
+                all_radar_points = radar_pc
+            else:
+                all_radar_points = np.concatenate((all_radar_points, radar_pc), axis = 1)
+            
+        # 只提取x,y,z,rcs,vx,vy  
+        # all_radar_points = np.array(all_radar_points)
+        # print(all_radar_points.shape)
+        all_radar_points = all_radar_points[[0,1,2,5,6,7], :].transpose()
+        # print(all_radar_points.shape)
         input_dict["radar_points"] = all_radar_points 
+        # print(all_radar_points[:,:10])
         return input_dict   
             
     def __len__(self):
@@ -231,8 +247,8 @@ class NuScenesDataset(DatasetTemplate):
         return len(self.infos)
 
     def __getitem__(self, index):
-        if self._merge_all_iters_to_one_epoch:
-            index = index % len(self.infos)
+        # if self._merge_all_iters_to_one_epoch:
+        #     index = index % len(self.infos)
             
         info = copy.deepcopy(self.infos[index])
         points = self.get_lidar_with_sweeps(index, max_sweeps=self.dataset_cfg.MAX_SWEEPS)
@@ -253,6 +269,7 @@ class NuScenesDataset(DatasetTemplate):
                 'gt_names': info['gt_names'] if mask is None else info['gt_names'][mask],
                 'gt_boxes': info['gt_boxes'] if mask is None else info['gt_boxes'][mask]
             })
+            
         # 加入相机数据
         if self.use_camera:
             input_dict = self.load_camera_info(input_dict, info)
@@ -374,7 +391,7 @@ class NuScenesDataset(DatasetTemplate):
             pickle.dump(all_db_infos, f)
 
 
-def create_nuscenes_info(version, data_path, save_path, max_sweeps=10, with_cam=False):
+def create_nuscenes_info(version, data_path, save_path, max_sweeps=10, with_cam=False, with_radar=False):
     from nuscenes.nuscenes import NuScenes
     from nuscenes.utils import splits
     from . import nuscenes_utils
@@ -406,7 +423,7 @@ def create_nuscenes_info(version, data_path, save_path, max_sweeps=10, with_cam=
 
     train_nusc_infos, val_nusc_infos = nuscenes_utils.fill_trainval_infos(
         data_path=data_path, nusc=nusc, train_scenes=train_scenes, val_scenes=val_scenes,
-        test='test' in version, max_sweeps=max_sweeps, with_cam=with_cam
+        test='test' in version, max_sweeps=max_sweeps, with_cam=with_cam, with_radar=with_radar
     )
 
     if version == 'v1.0-test':
@@ -432,24 +449,45 @@ if __name__ == '__main__':
     parser.add_argument('--func', type=str, default='create_nuscenes_infos', help='')
     parser.add_argument('--version', type=str, default='v1.0-trainval', help='')
     parser.add_argument('--with_cam', action='store_true', default=False, help='use camera or not')
+    parser.add_argument('--with_radar', action='store_true', default=False, help='use radar or not')
+    
     args = parser.parse_args()
 
     if args.func == 'create_nuscenes_infos':
         dataset_cfg = EasyDict(yaml.safe_load(open(args.cfg_file)))
         ROOT_DIR = (Path(__file__).resolve().parent / '../../../').resolve()
-        ROOT_DIR = (Path('/home/charles/myDataSet/nuScenes/v1.0-test_blobs_lidar').resolve())
+        # ROOT_DIR = (Path('/home/charles/myDataSet/nuScenes/v1.0-test_blobs_lidar').resolve())
         dataset_cfg.VERSION = args.version
-        create_nuscenes_info(
-            version=dataset_cfg.VERSION,
-            data_path=ROOT_DIR / 'data' / 'nuscenes',
-            save_path=ROOT_DIR / 'data' / 'nuscenes',
-            max_sweeps=dataset_cfg.MAX_SWEEPS,
-            with_cam=args.with_cam
-        )
+        
+        # create_nuscenes_info(
+        #     version=dataset_cfg.VERSION,
+        #     data_path=ROOT_DIR / 'data' / 'nuscenes',
+        #     save_path=ROOT_DIR / 'data' / 'nuscenes',
+        #     max_sweeps=dataset_cfg.MAX_SWEEPS,
+        #     with_cam=args.with_cam,
+        #     with_radar=args.with_radar
+        # )
 
+        # nuscenes_dataset = NuScenesDataset(
+        #     dataset_cfg=dataset_cfg, class_names=None,
+        #     root_path=ROOT_DIR / 'data' / 'nuscenes',
+        #     logger=common_utils.create_logger(), training=True
+        # )
+        
+        # nuscenes_dataset.create_groundtruth_database(max_sweeps=dataset_cfg.MAX_SWEEPS)
+        
+        # test
+        # nuscenes_dataset.class_names = ['car','truck', 'construction_vehicle', 'bus', 'trailer',
+        #       'barrier', 'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone']
+        
         nuscenes_dataset = NuScenesDataset(
-            dataset_cfg=dataset_cfg, class_names=None,
+            dataset_cfg=dataset_cfg, 
+            class_names=['car','truck', 'construction_vehicle', 'bus', 'trailer',
+              'barrier', 'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone'],
             root_path=ROOT_DIR / 'data' / 'nuscenes',
             logger=common_utils.create_logger(), training=True
         )
+        
         nuscenes_dataset.create_groundtruth_database(max_sweeps=dataset_cfg.MAX_SWEEPS)
+        
+        nuscenes_dataset.__getitem__(0)
