@@ -11,6 +11,7 @@ from ..dataset import DatasetTemplate
 from pyquaternion import Quaternion
 from PIL import Image
 
+from nuscenes.utils.data_classes import RadarPointCloud
 
 class NuScenesDataset(DatasetTemplate):
     def __init__(self, dataset_cfg, class_names, training=True, root_path=None, logger=None):
@@ -210,6 +211,19 @@ class NuScenesDataset(DatasetTemplate):
 
         return input_dict
 
+    def load_radar_info(self, input_dict, info):
+        input_dict["radar_paths"] = []
+        all_radar_points = []
+        for _, radar_info in info["radars"].items():
+            radar_path = radar_info["data_path"]
+            input_dict["radar_paths"].append(radar_path)
+            radarPointCloud_ = RadarPointCloud.from_file(radar_path)
+            radar_pc = radarPointCloud_.points # 只获取点云信息
+            all_radar_points.append(radar_pc)
+        
+        input_dict["radar_points"] = all_radar_points 
+        return input_dict   
+            
     def __len__(self):
         if self._merge_all_iters_to_one_epoch:
             return len(self.infos) * self.total_epochs
@@ -243,6 +257,9 @@ class NuScenesDataset(DatasetTemplate):
             })
         if self.use_camera:
             input_dict = self.load_camera_info(input_dict, info)
+            
+        if self.use_radar:
+            input_dict = self.load_radar_info(input_dict, info)
 
         data_dict = self.prepare_data(data_dict=input_dict)
 

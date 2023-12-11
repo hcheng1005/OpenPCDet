@@ -309,7 +309,7 @@ def obtain_sensor2top(
     return sweep
 
 
-def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, max_sweeps=10, with_cam=False):
+def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, max_sweeps=10, with_cam=False, with_radar=False):
     train_nusc_infos = []
     val_nusc_infos = []
     progress_bar = tqdm.tqdm(total=len(nusc.sample), desc='create_info', dynamic_ncols=True)
@@ -330,6 +330,9 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
 
         ref_cam_front_token = sample['data']['CAM_FRONT']
         ref_cam_path, _, ref_cam_intrinsic = nusc.get_sample_data(ref_cam_front_token)
+        
+        ref_radar_front_token = sample['data']['RADAR_FRONT']
+        ref_radar_path, _, _ = nusc.get_sample_data(ref_radar_front_token)
 
         # Homogeneous transform from ego car frame to reference frame
         ref_from_car = transform_matrix(
@@ -379,6 +382,22 @@ def fill_trainval_infos(data_path, nusc, train_scenes, val_scenes, test=False, m
                 cam_info.update(camera_intrinsics=camera_intrinsics)
                 info["cams"].update({cam: cam_info})
         
+        # 增加毫米波数据
+        if with_radar:
+            info['radars'] = dict()
+            radar_types = [
+                "RADAR_FRONT_RIGHT",
+                "RADAR_FRONT_LEFT",
+                "RADAR_FRONT",
+                "RADAR_BACK_LEFT",
+                "RADAR_BACK_RIGHT",
+            ]
+            for radar in radar_types:
+                radar_token = sample["data"][radar]
+                radar_path, _, _ = nusc.get_sample_data(radar_token)
+                radar_info=[]
+                radar_info['data_path'] = Path(radar_path).relative_to(data_path).__str__()
+                info["radars"].update({radar: radar_info})
 
         sample_data_token = sample['data'][chan]
         curr_sd_rec = nusc.get('sample_data', sample_data_token)
