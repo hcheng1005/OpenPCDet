@@ -28,7 +28,7 @@ class DatasetTemplate(torch_data.Dataset):
         self.point_cloud_range = np.array(self.dataset_cfg.POINT_CLOUD_RANGE, dtype=np.float32)
         
         self.radar_point_feature_encoder = RadarPointFeatureEncoder(
-            self.dataset_cfg.POINT_FEATURE_ENCODING,
+            self.dataset_cfg.RADAR_POINT_FEATURE_ENCODING,
             point_cloud_range=self.point_cloud_range
         )
         
@@ -244,12 +244,12 @@ class DatasetTemplate(torch_data.Dataset):
 
         for key, val in data_dict.items():
             try:
-                if key in ['voxels', 'voxel_num_points']:
+                if key in ['voxels', 'voxel_num_points', 'voxels_radar', 'voxel_num_points_radar']:
                     if isinstance(val[0], list):
                         batch_size_ratio = len(val[0])
                         val = [i for item in val for i in item]
                     ret[key] = np.concatenate(val, axis=0)
-                elif key in ['points', 'voxel_coords']:
+                elif key in ['points', 'voxel_coords', 'radar_points',  'voxel_coords_radar']:
                     coors = []
                     if isinstance(val[0], list):
                         val =  [i for item in val for i in item]

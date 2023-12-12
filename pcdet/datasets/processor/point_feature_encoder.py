@@ -88,7 +88,7 @@ class RadarPointFeatureEncoder(object):
                 ...
         """
         data_dict['radar_points'], use_lead_xyz = getattr(self, self.radar_point_encoding_config.encoding_type)(
-            data_dict['points']
+            data_dict['radar_points']
         )
         data_dict['use_lead_xyz'] = use_lead_xyz
        
@@ -112,7 +112,7 @@ class RadarPointFeatureEncoder(object):
         for x in self.used_feature_list:
             if x in ['x', 'y', 'z']: # xyz特征已经获取
                 continue
-            idx = self.src_feature_list.index(x) # 获取毫米波额外特征：'rcs', 'vx', 'vy'
+            idx = self.src_feature_list.index(x) # 获取毫米波额外特征：rcs, vx, vy, vx_comp, vy_comp
             point_feature_list.append(points[:, idx:idx+1])
         point_features = np.concatenate(point_feature_list, axis=1)
         

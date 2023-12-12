@@ -230,11 +230,12 @@ class NuScenesDataset(DatasetTemplate):
                 all_radar_points = radar_pc
             else:
                 all_radar_points = np.concatenate((all_radar_points, radar_pc), axis = 1)
-            
-        # 只提取x,y,z,rcs,vx,vy  
+                
+        # FIELDS x y z dyn_prop id rcs vx vy vx_comp vy_comp is_quality_valid ambig_state x_rms y_rms invalid_state pdh0 vx_rms vy_rms   
+        # 只提取x,y,z,rcs,vx,vy,vx_comp vy_comp  
         # all_radar_points = np.array(all_radar_points)
         # print(all_radar_points.shape)
-        all_radar_points = all_radar_points[[0,1,2,5,6,7], :].transpose()
+        all_radar_points = all_radar_points[[0,1,2,5,6,7,8,9], :].transpose()
         # print(all_radar_points.shape)
         input_dict["radar_points"] = all_radar_points 
         # print(all_radar_points[:,:10])
@@ -278,6 +279,7 @@ class NuScenesDataset(DatasetTemplate):
         if self.use_radar:
             input_dict = self.load_radar_info(input_dict, info)
 
+        # 数据预处理
         data_dict = self.prepare_data(data_dict=input_dict)
 
         if self.dataset_cfg.get('SET_NAN_VELOCITY_TO_ZEROS', False) and 'gt_boxes' in info:
@@ -459,35 +461,32 @@ if __name__ == '__main__':
         # ROOT_DIR = (Path('/home/charles/myDataSet/nuScenes/v1.0-test_blobs_lidar').resolve())
         dataset_cfg.VERSION = args.version
         
-        # create_nuscenes_info(
-        #     version=dataset_cfg.VERSION,
-        #     data_path=ROOT_DIR / 'data' / 'nuscenes',
-        #     save_path=ROOT_DIR / 'data' / 'nuscenes',
-        #     max_sweeps=dataset_cfg.MAX_SWEEPS,
-        #     with_cam=args.with_cam,
-        #     with_radar=args.with_radar
-        # )
+        create_nuscenes_info(
+            version=dataset_cfg.VERSION,
+            data_path=ROOT_DIR / 'data' / 'nuscenes',
+            save_path=ROOT_DIR / 'data' / 'nuscenes',
+            max_sweeps=dataset_cfg.MAX_SWEEPS,
+            with_cam=args.with_cam,
+            with_radar=args.with_radar
+        )
 
+        nuscenes_dataset = NuScenesDataset(
+            dataset_cfg=dataset_cfg, class_names=None,
+            root_path=ROOT_DIR / 'data' / 'nuscenes',
+            logger=common_utils.create_logger(), training=True
+        )
+
+        nuscenes_dataset.create_groundtruth_database(max_sweeps=dataset_cfg.MAX_SWEEPS)
+        
+        # # # test
         # nuscenes_dataset = NuScenesDataset(
-        #     dataset_cfg=dataset_cfg, class_names=None,
+        #     dataset_cfg=dataset_cfg, 
+        #     class_names=['car','truck', 'construction_vehicle', 'bus', 'trailer',
+        #       'barrier', 'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone'],
         #     root_path=ROOT_DIR / 'data' / 'nuscenes',
         #     logger=common_utils.create_logger(), training=True
         # )
         
-        # nuscenes_dataset.create_groundtruth_database(max_sweeps=dataset_cfg.MAX_SWEEPS)
+        # # nuscenes_dataset.create_groundtruth_database(max_sweeps=dataset_cfg.MAX_SWEEPS)
         
-        # test
-        # nuscenes_dataset.class_names = ['car','truck', 'construction_vehicle', 'bus', 'trailer',
-        #       'barrier', 'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone']
-        
-        nuscenes_dataset = NuScenesDataset(
-            dataset_cfg=dataset_cfg, 
-            class_names=['car','truck', 'construction_vehicle', 'bus', 'trailer',
-              'barrier', 'motorcycle', 'bicycle', 'pedestrian', 'traffic_cone'],
-            root_path=ROOT_DIR / 'data' / 'nuscenes',
-            logger=common_utils.create_logger(), training=True
-        )
-        
-        nuscenes_dataset.create_groundtruth_database(max_sweeps=dataset_cfg.MAX_SWEEPS)
-        
-        nuscenes_dataset.__getitem__(0)
+        # nuscenes_dataset.__getitem__(0)

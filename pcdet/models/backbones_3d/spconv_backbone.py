@@ -255,6 +255,7 @@ class VoxelResBackBone8x(nn.Module):
                 encoded_spconv_tensor: sparse tensor
         """
         voxel_features, voxel_coords = batch_dict['voxel_features'], batch_dict['voxel_coords']
+        # print(voxel_features.cpu().numpy().shape)
         
         # voxel_features2 = np.array(voxel_features.half().cpu().numpy())
         # voxel_features2.tofile('./voxel_features.bin')

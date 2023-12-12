@@ -27,7 +27,22 @@ class ConvFuser(nn.Module):
         """
         img_bev = batch_dict['spatial_features_img']
         lidar_bev = batch_dict['spatial_features']
-        cat_bev = torch.cat([img_bev,lidar_bev],dim=1)
+        
+        tmp1 = img_bev.detach()
+        print("img_bev shape: ", tmp1.cpu().numpy().shape)
+        tmp1 = lidar_bev.detach()
+        print("lidar_bev shape: ", tmp1.cpu().numpy().shape)
+        radar_bev = batch_dict['spatial_features_radar']
+        tmp1 = radar_bev.detach()
+        print("lidar_bev shape: ", tmp1.cpu().numpy().shape)
+        if 'spatial_features_radar' in batch_dict.keys(): # 若存在毫米波特征，则加入
+            radar_bev = batch_dict['spatial_features_radar']
+            tmp1 = radar_bev.detach()
+            print("radar_bev shape: ", tmp1.cpu().numpy().shape)
+            cat_bev = torch.cat([img_bev,lidar_bev,radar_bev],dim=1)
+        else:
+            cat_bev = torch.cat([img_bev,lidar_bev],dim=1)
+            
         mm_bev = self.conv(cat_bev)
         batch_dict['spatial_features'] = mm_bev
         return batch_dict

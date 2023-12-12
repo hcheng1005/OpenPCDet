@@ -26,13 +26,14 @@ def load_data_to_gpu(batch_dict):
             batch_dict[key] = val.cuda()
         elif not isinstance(val, np.ndarray):
             continue
-        elif key in ['frame_id', 'metadata', 'calib', 'image_paths','ori_shape','img_process_infos']:
+        elif key in ['frame_id', 'metadata', 'calib', 'image_paths','ori_shape','img_process_infos', 'radar_paths']:
             continue
         elif key in ['images']:
             batch_dict[key] = kornia.image_to_tensor(val).float().cuda().contiguous()
         elif key in ['image_shape']:
             batch_dict[key] = torch.from_numpy(val).int().cuda()
         else:
+            # print(key)
             batch_dict[key] = torch.from_numpy(val).float().cuda()
 
 

@@ -3,17 +3,45 @@ from .. import backbones_image, view_transforms
 from ..backbones_image import img_neck
 from ..backbones_2d import fuser
 
+
+from ..backbones_3d.vfe import RadarPillarVFE
+from ..backbones_2d.map_to_bev import RadarPointPillarScatter
+
 class BevFusion(Detector3DTemplate):
     def __init__(self, model_cfg, num_class, dataset):
         super().__init__(model_cfg=model_cfg, num_class=num_class, dataset=dataset)
         self.module_topology = [
             'vfe', 'backbone_3d', 'map_to_bev_module', 'pfe',
             'image_backbone','neck','vtransform',
-            'radar_vfe','radar_map_to_bev_module'
+            'radar_vfe','radar_map_to_bev'
             'fuser',
             'backbone_2d', 'dense_head',  'point_head', 'roi_head'
         ]
         self.module_list = self.build_networks()
+       
+    '''
+    names: build_radar_vfe
+    description: 毫米波雷达的Voxel特征编码模块
+    param {*} self
+    param {*} model_info_dict
+    return {*}
+    '''
+    def build_radar_vfe(self,model_info_dict):  
+        radar_vfe_module = RadarPillarVFE(model_cfg=self.model_cfg.RADAR_VFE)
+        model_info_dict['module_list'].append(radar_vfe_module)
+        return  radar_vfe_module, model_info_dict
+    
+    '''
+    names: build_radar_map_to_bev
+    description: 毫米波雷达BEV特征生成模块
+    param {*} self
+    param {*} model_info_dict
+    return {*}
+    '''
+    def build_radar_map_to_bev(self,model_info_dict): 
+        radar_map_to_bev_module = RadarPointPillarScatter(model_cfg=self.model_cfg.RADAR_MAP_TO_BEV)
+        model_info_dict['module_list'].append(radar_map_to_bev_module)
+        return radar_map_to_bev_module, model_info_dict
        
     def build_neck(self,model_info_dict):
         if self.model_cfg.get('NECK', None) is None:

@@ -67,10 +67,11 @@ class DataProcessor(object):
         self.training = training
         self.num_point_features = num_point_features
         self.mode = 'train' if training else 'test'
-        self.grid_size = self.voxel_size = None
+        self.grid_size = self.voxel_size = self.grid_size_radar = self.voxel_size_radar = None
         self.data_processor_queue = []
 
         self.voxel_generator = None
+        self.voxel_generator_Radar = None
 
         for cur_cfg in processor_configs:
             cur_processor = getattr(self, cur_cfg.NAME)(config=cur_cfg)
@@ -84,6 +85,7 @@ class DataProcessor(object):
             mask = common_utils.mask_points_by_range(data_dict['points'], self.point_cloud_range)
             data_dict['points'] = data_dict['points'][mask]
 
+        # 删除范围外的毫米波雷达点云，此处“point_cloud_range”参数与激光保持一致
         if data_dict.get('radar_points', None) is not None:
             mask = common_utils.mask_points_by_range(data_dict['radar_points'], self.point_cloud_range)
             data_dict['radar_points'] = data_dict['radar_points'][mask]
@@ -136,24 +138,24 @@ class DataProcessor(object):
 
     def transform_points_to_voxels_radar(self, data_dict=None, config=None):
         if data_dict is None:
-            grid_size = (self.point_cloud_range[3:6] - self.point_cloud_range[0:3]) / np.array(config.VOXEL_SIZE)
-            self.grid_size = np.round(grid_size).astype(np.int64)
-            self.voxel_size = config.VOXEL_SIZE
+            grid_size = (self.point_cloud_range[3:6] - self.point_cloud_range[0:3]) / np.array(config.RADAR_VOXEL_SIZE)
+            self.grid_size_radar = np.round(grid_size).astype(np.int64)
+            self.voxel_size_radar = config.RADAR_VOXEL_SIZE
             # just bind the config, we will create the VoxelGeneratorWrapper later,
             # to avoid pickling issues in multiprocess spawn
             return partial(self.transform_points_to_voxels_radar, config=config)
 
-        if self.voxel_generator is None:
-            self.voxel_generator = VoxelGeneratorWrapper(
-                vsize_xyz=config.VOXEL_SIZE,
+        # 重新配置毫米波的voxel参数
+        self.voxel_generator_Radar = VoxelGeneratorWrapper(
+                vsize_xyz=config.RADAR_VOXEL_SIZE,
                 coors_range_xyz=self.point_cloud_range,
-                num_point_features=self.num_point_features,
+                num_point_features=config.RADAR_NUM_POINT_FEATURES,
                 max_num_points_per_voxel=config.MAX_POINTS_PER_VOXEL,
                 max_num_voxels=config.MAX_NUMBER_OF_VOXELS[self.mode],
             )
 
         points = data_dict['radar_points']
-        voxel_output = self.voxel_generator.generate(points)
+        voxel_output = self.voxel_generator_Radar.generate(points)
         voxels, coordinates, num_points = voxel_output
 
         if not data_dict['use_lead_xyz']:

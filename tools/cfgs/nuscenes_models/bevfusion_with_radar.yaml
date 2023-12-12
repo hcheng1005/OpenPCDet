@@ -45,14 +45,15 @@ DATA_CONFIG:
 
         - NAME: transform_points_to_voxels
           VOXEL_SIZE: [0.075, 0.075, 0.2]
-          MAX_POINTS_PER_VOXEL: 10
+          MAX_POINTS_PER_VOXEL: 10 
           MAX_NUMBER_OF_VOXELS: {
             'train': 120000,
             'test': 160000
           }
 
         - NAME: transform_points_to_voxels_radar
-          VOXEL_SIZE: [0.16, 0.16, 8]
+          RADAR_NUM_POINT_FEATURES: 5 #  x, y, z, rcs, vx, vy, vx_comp, vy_comp 8=3+5
+          RADAR_VOXEL_SIZE: [0.16, 0.16, 8]
           MAX_POINTS_PER_VOXEL: 10
           MAX_NUMBER_OF_VOXELS: {
             'train': 120000,
@@ -94,9 +95,9 @@ MODEL:
         OUT_INDICES: [1, 2, 3]
         WITH_CP: False
         CONVERT_WEIGHTS: True
-        INIT_CFG:
-            type: Pretrained
-            checkpoint: swint-nuimages-pretrained.pth
+        # INIT_CFG:
+        #     type: Pretrained
+        #     checkpoint: swint-nuimages-pretrained.pth
     
     NECK:
         NAME: GeneralizedLSSFPN
@@ -207,7 +208,7 @@ MODEL:
 
 
 OPTIMIZATION:
-    BATCH_SIZE_PER_GPU: 3
+    BATCH_SIZE_PER_GPU: 1
     NUM_EPOCHS: 6
 
     OPTIMIZER: adam_cosineanneal

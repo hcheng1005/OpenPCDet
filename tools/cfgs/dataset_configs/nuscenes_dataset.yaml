@@ -1,5 +1,5 @@
 DATASET: 'NuScenesDataset'
-DATA_PATH: '/media/charles/ShareDisk/00myDataSet/nuScenes'
+DATA_PATH: '/root/code/OpenPCDet/data/nuscenes'
 
 VERSION: 'v1.0-mini'
 MAX_SWEEPS: 10
@@ -60,10 +60,10 @@ POINT_FEATURE_ENCODING: {
     src_feature_list: ['x', 'y', 'z', 'intensity', 'timestamp'],
 }
 
-RADARPOINT_FEATURE_ENCODING: {
+RADAR_POINT_FEATURE_ENCODING: {
     encoding_type: absolute_coordinates_encoding,
-    used_feature_list: ['x', 'y', 'z', 'rcs', 'vx', 'vy'],
-    src_feature_list: ['x', 'y', 'z', 'rcs', 'vx', 'vy'],
+    used_feature_list: ['x', 'y', 'z', 'rcs', 'vy_comp'],
+    src_feature_list: ['x', 'y', 'z', 'rcs', 'vx', 'vy', 'vx_comp', 'vy_comp'],
 }
 
 DATA_PROCESSOR:

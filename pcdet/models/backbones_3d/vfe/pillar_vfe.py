@@ -54,27 +54,35 @@ class PFNLayer(nn.Module):
 
 
 class PillarVFE(VFETemplate):
+    """
+    model_cfg:NAME: PillarVFE
+                    WITH_DISTANCE: False
+                    USE_ABSLOTE_XYZ: True
+                    USE_NORM: True
+                    NUM_FILTERS: [64]
+    num_point_features:7 ['x', 'y', 'z', 'rcs', 'v_r', 'v_r_comp', 'time']
+    voxel_size:[0.16 0.16 4]
+    POINT_CLOUD_RANGE: [0, -39.68, -3, 69.12, 39.68, 1]
+    """
     def __init__(self, model_cfg, num_point_features, voxel_size, point_cloud_range, **kwargs):
         super().__init__(model_cfg=model_cfg)
+
 
         self.use_norm = self.model_cfg.USE_NORM
         self.with_distance = self.model_cfg.WITH_DISTANCE
         self.use_absolute_xyz = self.model_cfg.USE_ABSLOTE_XYZ
-        # num_point_features:10
         num_point_features += 6 if self.use_absolute_xyz else 3
         if self.with_distance:
             num_point_features += 1
-        #[64]
+
         self.num_filters = self.model_cfg.NUM_FILTERS
         assert len(self.num_filters) > 0
-        # num_filters:  [10, 64]
         num_filters = [num_point_features] + list(self.num_filters)
 
         pfn_layers = []
-        #len(num_filters) - 1 == 1
         for i in range(len(num_filters) - 1):
-            in_filters = num_filters[i] # 10
-            out_filters = num_filters[i + 1] # 64
+            in_filters = num_filters[i]
+            out_filters = num_filters[i + 1]
             pfn_layers.append(
                 PFNLayer(in_filters, out_filters, self.use_norm, last_layer=(i >= len(num_filters) - 2))
             )
@@ -92,72 +100,94 @@ class PillarVFE(VFETemplate):
         return self.num_filters[-1]
 
     def get_paddings_indicator(self, actual_num, max_num, axis=0):
-        '''
-        指出一个pillar中哪些是真实数据,哪些是填充的0数据
-        '''
+        """
+        计算padding的指示
+        Args:
+            actual_num:每个voxel实际点的数量（M，）
+            max_num:voxel最大点的数量（32，）
+        Returns:
+            paddings_indicator:表明一个pillar中哪些是真实数据，哪些是填充的0数据
+        
+        mask = self.get_paddings_indicator(voxel_num_points, voxel_count, axis=0)
+        """
+        # 扩展一个维度，使变为（M，1）
         actual_num = torch.unsqueeze(actual_num, axis + 1)
-        max_num_shape = [1] * len(actual_num.shape)
+        # [1, 1]
+        max_num_shape = [1] * len(actual_num.shape)#len(actual_num.shape) 求actual_num.shape的维度
+        # [1, -1]
         max_num_shape[axis + 1] = -1
+        # (1,32)
         max_num = torch.arange(max_num, dtype=torch.int, device=actual_num.device).view(max_num_shape)
+        # (M, 32)
         paddings_indicator = actual_num.int() > max_num
         return paddings_indicator
 
     def forward(self, batch_dict, **kwargs):
-
-        '''
-	batch_dict:
+        """
+        batch_dict:
             points:(N,5) --> (batch_index,x,y,z,r) batch_index代表了该点云数据在当前batch中的index
-            frame_id:(batch_size,) -->帧ID-->我们存放的是npy的绝对地址，batch_size个地址
-            gt_boxes:(batch_size,N,8)--> (x,y,z,dx,dy,dz,ry,class)，
-            use_lead_xyz:(batch_size,) --> (1,1,1,1)，batch_size个1
+            frame_id:(4,) --> (003877,001908,006616,005355) 帧ID
+            gt_boxes:(4,40,8)--> (x,y,z,dx,dy,dz,ry,class)
+            use_lead_xyz:(4,) --> (1,1,1,1)
             voxels:(M,32,4) --> (x,y,z,r)
-            voxel_coords:(M,4) --> (batch_index,z,y,x) batch_index代表了该点云数据在当前batch中的index
-            voxel_num_points:(M,):每个voxel内的点云
-            batch_size:4：batch_size大小
-        '''
+            voxel_coords:(M,4) --> (batch_index,z,y,x) batch_index代表了该pillar数据在当前batch中的index
+            voxel_num_points:(M,)
+            image_shape:(4,2) 每份点云数据对应的2号相机图片分辨率
+            batch_size:4    batch_size大小
+        """
   
         voxel_features, voxel_num_points, coords = batch_dict['voxels'], batch_dict['voxel_num_points'], batch_dict['voxel_coords']
-        #求每个pillar中所有点云的平均值,设置keepdim=True的，则保留原来的维度信息
+        # 求每个pillar中所有点云的和 (M, 32, 3)->(M, 1, 3) 设置keepdim=True的，则保留原来的维度信息
+        # 然后在使用求和信息除以每个点云中有多少个点(M,)来求每个pillar中所有点云的平均值 points_mean shape：(M, 1, 3)
         points_mean = voxel_features[:, :, :3].sum(dim=1, keepdim=True) / voxel_num_points.type_as(voxel_features).view(-1, 1, 1)
-        #每个点云数据减去该点对应pillar的平均值，得到差值 xc,yc,zc
+        # 每个点云数据减去该点对应pillar的平均值得到差值 xc,yc,zc
         f_cluster = voxel_features[:, :, :3] - points_mean
-
         # 创建每个点云到该pillar的坐标中心点偏移量空数据 xp,yp,zp
+        #  coords是每个网格点的坐标，即[432, 496, 1]，需要乘以每个pillar的长宽得到点云数据中实际的长宽（单位米）
+        #  同时为了获得每个pillar的中心点坐标，还需要加上每个pillar长宽的一半得到中心点坐标
+        #  每个点的x、y、z减去对应pillar的坐标中心点，得到每个点到该点中心点的偏移量
         f_center = torch.zeros_like(voxel_features[:, :, :3])
-        '''
-          coords是每个网格点的坐标，即[432, 496, 1]，需要乘以每个pillar的长宽得到点云数据中实际的长宽（单位米）
-          同时为了获得每个pillar的中心点坐标，还需要加上每个pillar长宽的一半得到中心点坐标
-          每个点的x、y、z减去对应pillar的坐标中心点，得到每个点到该点中心点的偏移量
-        '''
+
+        # print("voxel_coords", coords[:,0])
         f_center[:, :, 0] = voxel_features[:, :, 0] - (coords[:, 3].to(voxel_features.dtype).unsqueeze(1) * self.voxel_x + self.x_offset)
         f_center[:, :, 1] = voxel_features[:, :, 1] - (coords[:, 2].to(voxel_features.dtype).unsqueeze(1) * self.voxel_y + self.y_offset)
         f_center[:, :, 2] = voxel_features[:, :, 2] - (coords[:, 1].to(voxel_features.dtype).unsqueeze(1) * self.voxel_z + self.z_offset)
-
-        #配置中使用了绝对坐标，直接组合即可。
+        # 如果使用绝对坐标，直接组合
         if self.use_absolute_xyz:
-            features = [voxel_features, f_cluster, f_center] #10个特征，直接组合
+            features = [voxel_features, f_cluster, f_center]
         else:
             features = [voxel_features[..., 3:], f_cluster, f_center]
-
-        #距离信息，False
+        # 如果使用距离信息
         if self.with_distance:
+            # torch.norm的第一个2指的是求2范数，第二个2是在第三维度求范数
             points_dist = torch.norm(voxel_features[:, :, :3], 2, 2, keepdim=True)
             features.append(points_dist)
+        # 将特征在最后一维度拼接 得到维度为（M，32,10）的张量
         features = torch.cat(features, dim=-1)
-
+        # print(features.shape)
+        """
+        由于在生成每个pillar中，不满足最大32个点的pillar会存在由0填充的数据，
+        而刚才上面的计算中，会导致这些
+        由0填充的数据在计算出现xc,yc,zc和xp,yp,zp出现数值，
+        所以需要将这个被填充的数据的这些数值清0,
+        因此使用get_paddings_indicator计算features中哪些是需要被保留真实数据和需要被置0的填充数据
+        """
         voxel_count = features.shape[1]
-        #mask中指明了每个pillar中哪些是需要被保留的数据
+        # 得到mask维度是（M， 32）
+        # mask中指名了每个pillar中哪些是需要被保留的数据
         mask = self.get_paddings_indicator(voxel_num_points, voxel_count, axis=0)
+        # （M， 32）->(M, 32, 1)
         mask = torch.unsqueeze(mask, -1).type_as(voxel_features)
-        #由0填充的数据，在计算出现xc,yc,zc和xp,yp,zp时会有值
-        #features中去掉0值信息。
+        # 将feature中被填充数据的所有特征置0
         features *= mask
-        #执行上面收集的PFN层，每个pillar抽象出64维特征
         for pfn in self.pfn_layers:
             features = pfn(features)
+        # (M, 64), 每个pillar抽象出一个64维特征
         features = features.squeeze()
         batch_dict['pillar_features'] = features
+        # print("batch_dict['voxel_coords']" ,batch_dict['voxel_coords'].shape)
         return batch_dict
+
 
 class RadarPillarVFE(VFETemplate):
     def __init__(self, model_cfg, num_point_features, voxel_size, point_cloud_range):
@@ -169,19 +199,30 @@ class RadarPillarVFE(VFETemplate):
         self.with_distance = self.model_cfg.WITH_DISTANCE
         self.selected_indexes = []
 
-        ## check if config has the correct params, if not, throw exception
-        radar_config_params = ["USE_RCS", "USE_VR", "USE_VR_COMP", "USE_TIME", "USE_ELEVATION"]
+        # ## check if config has the correct params, if not, throw exception
+        # radar_config_params = ["USE_RCS", "USE_VR", "USE_VR_COMP", "USE_TIME", "USE_ELEVATION"]
 
-        if all(hasattr(self.model_cfg, attr) for attr in radar_config_params):
-            self.use_RCS = self.model_cfg.USE_RCS
-            self.use_vr = self.model_cfg.USE_VR
-            self.use_vr_comp = self.model_cfg.USE_VR_COMP
-            self.use_time = self.model_cfg.USE_TIME
-            self.use_elevation = self.model_cfg.USE_ELEVATION
-        else:
-            raise Exception("config does not have the right parameters, please use a radar config")
+        # if all(hasattr(self.model_cfg, attr) for attr in radar_config_params):
+        #     self.use_RCS = self.model_cfg.USE_RCS
+        #     self.use_vx = self.model_cfg.USE_VR
+        #     self.use_vy = self.model_cfg.USE_VR_COMP
+        #     self.use_vx_comp = self.model_cfg.USE_TIME
+        #     self.use_vy_comp = self.model_cfg.USE_ELEVATION
+        # else:
+        #     raise Exception("config does not have the right parameters, please use a radar config")
+        
+        self.use_RCS = True
+        self.use_vx = True
+        self.use_vy = True
+        self.use_vx_comp = True
+        self.use_vy_comp = True
+        self.use_time = False
 
-        self.available_features = ['x', 'y', 'z', 'rcs', 'v_r', 'v_r_comp', 'time']
+        # x y z dyn_prop id rcs vx vy vx_comp vy_comp
+        # self.available_features = ['x', 'y', 'z', 'rcs', 'v_r', 'v_r_comp', 'time']
+        
+        # 目前使用如下特征：x y z rcs vx vy vx_comp vy_comp 
+        self.available_features = ['x', 'y', 'z', 'rcs', 'vx', 'vy', 'vx_comp','vy_comp' ]
 
         num_point_features += 6  # center_x, center_y, center_z, mean_x, mean_y, mean_z, time, we need 6 new
 
@@ -189,9 +230,11 @@ class RadarPillarVFE(VFETemplate):
         self.y_ind = self.available_features.index('y')
         self.z_ind = self.available_features.index('z')
         self.rcs_ind = self.available_features.index('rcs')
-        self.vr_ind = self.available_features.index('v_r')
-        self.vr_comp_ind = self.available_features.index('v_r_comp')
-        self.time_ind = self.available_features.index('time')
+        self.vx_ind = self.available_features.index('vx')
+        self.vy_ind = self.available_features.index('vy')
+        self.vx_comp_ind = self.available_features.index('vx_comp')
+        self.vy_comp_ind = self.available_features.index('vy_comp')
+        self.time_ind = self.available_features.index('time') # not used 
 
         if self.use_xyz:  # if x y z coordinates are used, add 3 channels and save the indexes
             num_point_features += 3  # x, y, z
@@ -201,13 +244,21 @@ class RadarPillarVFE(VFETemplate):
             num_point_features += 1
             self.selected_indexes.append(self.rcs_ind)  # adding  RCS channels to the indexes
 
-        if self.use_vr:  # add 1 if vr is used and save the indexes. Note, we use compensated vr!
+        if self.use_vx:  # add 1 if vr is used and save the indexes. Note, we use compensated vr!
             num_point_features += 1
-            self.selected_indexes.append(self.vr_ind)  # adding  v_r_comp channels to the indexes
+            self.selected_indexes.append(self.vx_ind)  # adding  v_r_comp channels to the indexes
+            
+        if self.use_vy:  # add 1 if vr is used and save the indexes. Note, we use compensated vr!
+            num_point_features += 1
+            self.selected_indexes.append(self.vy_ind)  # adding  v_r_comp channels to the indexes
 
-        if self.use_vr_comp:  # add 1 if vr is used (as proxy for sensor cue) and save the indexes
+        if self.use_vx_comp:  # add 1 if vr is used (as proxy for sensor cue) and save the indexes
             num_point_features += 1
-            self.selected_indexes.append(self.vr_comp_ind)
+            self.selected_indexes.append(self.vx_comp_ind)
+            
+        if self.use_vy_comp:  # add 1 if vr is used (as proxy for sensor cue) and save the indexes
+            num_point_features += 1
+            self.selected_indexes.append(self.vy_comp_ind)
 
         if self.use_time:  # add 1 if time is used and save the indexes
             num_point_features += 1
@@ -262,7 +313,7 @@ class RadarPillarVFE(VFETemplate):
         # x is pointing forward, y is left right, z is up down
         # spconv returns voxel_coords as  [batch_idx, z_idx, y_idx, x_idx], that is why coords is indexed backwards
 
-        voxel_features, voxel_num_points, coords = batch_dict['voxels'], batch_dict['voxel_num_points'], batch_dict['voxel_coords']
+        voxel_features, voxel_num_points, coords = batch_dict['voxels_radar'], batch_dict['voxel_num_points_radar'], batch_dict['voxel_coords_radar']
 
         if not self.use_elevation:  # if we ignore elevation (z) and v_z
             voxel_features[:, :, self.z_ind] = 0  # set z to zero before doing anything
