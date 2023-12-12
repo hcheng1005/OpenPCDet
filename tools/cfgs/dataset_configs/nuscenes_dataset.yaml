@@ -1,5 +1,5 @@
 DATASET: 'NuScenesDataset'
-DATA_PATH: '/root/code/OpenPCDet/data/nuscenes'
+DATA_PATH: '/data/chenghao/mycode/private/OpenPCDet/data/nuscenes'
 
 VERSION: 'v1.0-mini'
 MAX_SWEEPS: 10
@@ -62,7 +62,7 @@ POINT_FEATURE_ENCODING: {
 
 RADAR_POINT_FEATURE_ENCODING: {
     encoding_type: absolute_coordinates_encoding,
-    used_feature_list: ['x', 'y', 'z', 'rcs', 'vy_comp'],
+    used_feature_list: ['x', 'y', 'z', 'rcs'],
     src_feature_list: ['x', 'y', 'z', 'rcs', 'vx', 'vy', 'vx_comp', 'vy_comp'],
 }
 

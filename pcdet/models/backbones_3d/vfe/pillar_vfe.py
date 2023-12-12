@@ -198,31 +198,17 @@ class RadarPillarVFE(VFETemplate):
         self.use_xyz = self.model_cfg.USE_ABSLOTE_XYZ
         self.with_distance = self.model_cfg.WITH_DISTANCE
         self.selected_indexes = []
-
-        # ## check if config has the correct params, if not, throw exception
-        # radar_config_params = ["USE_RCS", "USE_VR", "USE_VR_COMP", "USE_TIME", "USE_ELEVATION"]
-
-        # if all(hasattr(self.model_cfg, attr) for attr in radar_config_params):
-        #     self.use_RCS = self.model_cfg.USE_RCS
-        #     self.use_vx = self.model_cfg.USE_VR
-        #     self.use_vy = self.model_cfg.USE_VR_COMP
-        #     self.use_vx_comp = self.model_cfg.USE_TIME
-        #     self.use_vy_comp = self.model_cfg.USE_ELEVATION
-        # else:
-        #     raise Exception("config does not have the right parameters, please use a radar config")
         
         self.use_RCS = True
-        self.use_vx = True
-        self.use_vy = True
-        self.use_vx_comp = True
-        self.use_vy_comp = True
+        self.use_vx = False
+        self.use_vy = False
+        self.use_vx_comp = False
+        self.use_vy_comp = False
         self.use_time = False
-
-        # x y z dyn_prop id rcs vx vy vx_comp vy_comp
-        # self.available_features = ['x', 'y', 'z', 'rcs', 'v_r', 'v_r_comp', 'time']
         
         # 目前使用如下特征：x y z rcs vx vy vx_comp vy_comp 
         self.available_features = ['x', 'y', 'z', 'rcs', 'vx', 'vy', 'vx_comp','vy_comp' ]
+        # self.available_features = ['x', 'y', 'z', 'rcs']
 
         num_point_features += 6  # center_x, center_y, center_z, mean_x, mean_y, mean_z, time, we need 6 new
 
@@ -234,7 +220,7 @@ class RadarPillarVFE(VFETemplate):
         self.vy_ind = self.available_features.index('vy')
         self.vx_comp_ind = self.available_features.index('vx_comp')
         self.vy_comp_ind = self.available_features.index('vy_comp')
-        self.time_ind = self.available_features.index('time') # not used 
+        # self.time_ind = self.available_features.index('time') # not used 
 
         if self.use_xyz:  # if x y z coordinates are used, add 3 channels and save the indexes
             num_point_features += 3  # x, y, z
@@ -313,10 +299,12 @@ class RadarPillarVFE(VFETemplate):
         # x is pointing forward, y is left right, z is up down
         # spconv returns voxel_coords as  [batch_idx, z_idx, y_idx, x_idx], that is why coords is indexed backwards
 
-        voxel_features, voxel_num_points, coords = batch_dict['voxels_radar'], batch_dict['voxel_num_points_radar'], batch_dict['voxel_coords_radar']
+        voxel_features, voxel_num_points, coords =  batch_dict['voxels_radar'], \
+                                                    batch_dict['voxel_num_points_radar'], \
+                                                    batch_dict['voxel_coords_radar']
 
-        if not self.use_elevation:  # if we ignore elevation (z) and v_z
-            voxel_features[:, :, self.z_ind] = 0  # set z to zero before doing anything
+        # if not self.use_elevation:  # if we ignore elevation (z) and v_z
+        #     voxel_features[:, :, self.z_ind] = 0  # set z to zero before doing anything
 
         orig_xyz = voxel_features[:, :, :self.z_ind + 1]  # selecting x y z
 

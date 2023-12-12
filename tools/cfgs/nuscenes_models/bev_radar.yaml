@@ -52,8 +52,8 @@ DATA_CONFIG:
           }
 
         - NAME: transform_points_to_voxels_radar
-          RADAR_NUM_POINT_FEATURES: 5 #  x, y, z, rcs, vx, vy, vx_comp, vy_comp 8=3+5
-          RADAR_VOXEL_SIZE: [0.16, 0.16, 8]
+          RADAR_NUM_POINT_FEATURES: 4 #  x, y, z, rcs, vx, vy, vx_comp, vy_comp 8=3+5
+          RADAR_VOXEL_SIZE: [0.6, 0.6, 8]
           MAX_POINTS_PER_VOXEL: 10
           MAX_NUMBER_OF_VOXELS: {
             'train': 120000,
@@ -68,7 +68,7 @@ DATA_CONFIG:
 
 
 MODEL:
-    NAME: BevFusion
+    NAME: BevFusion_Radar
 
     VFE:
         NAME: MeanVFE
@@ -95,9 +95,9 @@ MODEL:
         OUT_INDICES: [1, 2, 3]
         WITH_CP: False
         CONVERT_WEIGHTS: True
-        # INIT_CFG:
-        #     type: Pretrained
-        #     checkpoint: swint-nuimages-pretrained.pth
+        INIT_CFG:
+            type: Pretrained
+            checkpoint: '/data/chenghao/mycode/private/OpenPCDet/tools/ckpt/images/swint-nuimages-pretrained.pth'
     
     NECK:
         NAME: GeneralizedLSSFPN
@@ -124,15 +124,15 @@ MODEL:
         WITH_DISTANCE: False
         USE_ABSLOTE_XYZ: True
         USE_NORM: True
-        NUM_FILTERS: [64]
+        NUM_FILTERS: [32] # 一个con2d模块
 
     RADAR_MAP_TO_BEV:
-        NAME: PointPillarScatter
-        NUM_BEV_FEATURES: 64
+        NAME: RadarPointPillarScatter
+        NUM_BEV_FEATURES: 32
    
     FUSER:
         NAME: ConvFuser
-        IN_CHANNEL: 336
+        IN_CHANNEL: 368
         OUT_CHANNEL: 256
     
     BACKBONE_2D:
@@ -208,8 +208,8 @@ MODEL:
 
 
 OPTIMIZATION:
-    BATCH_SIZE_PER_GPU: 1
-    NUM_EPOCHS: 6
+    BATCH_SIZE_PER_GPU: 4
+    NUM_EPOCHS: 80
 
     OPTIMIZER: adam_cosineanneal
     LR: 0.0001

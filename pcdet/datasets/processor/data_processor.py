@@ -74,6 +74,7 @@ class DataProcessor(object):
         self.voxel_generator_Radar = None
 
         for cur_cfg in processor_configs:
+            print(cur_cfg.NAME)
             cur_processor = getattr(self, cur_cfg.NAME)(config=cur_cfg)
             self.data_processor_queue.append(cur_processor)
 
@@ -139,7 +140,12 @@ class DataProcessor(object):
     def transform_points_to_voxels_radar(self, data_dict=None, config=None):
         if data_dict is None:
             grid_size = (self.point_cloud_range[3:6] - self.point_cloud_range[0:3]) / np.array(config.RADAR_VOXEL_SIZE)
+            print("config.RADAR_VOXEL_SIZE: ", config.RADAR_VOXEL_SIZE)
+            
             self.grid_size_radar = np.round(grid_size).astype(np.int64)
+            
+            print("grid_size_radar: ", self.grid_size_radar)
+            
             self.voxel_size_radar = config.RADAR_VOXEL_SIZE
             # just bind the config, we will create the VoxelGeneratorWrapper later,
             # to avoid pickling issues in multiprocess spawn
@@ -156,6 +162,7 @@ class DataProcessor(object):
 
         points = data_dict['radar_points']
         voxel_output = self.voxel_generator_Radar.generate(points)
+        # print('voxel_output: ', voxel_output)
         voxels, coordinates, num_points = voxel_output
 
         if not data_dict['use_lead_xyz']:

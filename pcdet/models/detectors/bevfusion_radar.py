@@ -7,13 +7,13 @@ from ..backbones_2d import fuser
 from ..backbones_3d.vfe import RadarPillarVFE
 from ..backbones_2d.map_to_bev import RadarPointPillarScatter
 
-class BevFusion(Detector3DTemplate):
+class BevFusion_Radar(Detector3DTemplate):
     def __init__(self, model_cfg, num_class, dataset):
         super().__init__(model_cfg=model_cfg, num_class=num_class, dataset=dataset)
         self.module_topology = [
             'vfe', 'backbone_3d', 'map_to_bev_module', 'pfe',
             'image_backbone','neck','vtransform',
-            'radar_vfe','radar_map_to_bev'
+            'radar_vfe','radar_map_to_bev',
             'fuser',
             'backbone_2d', 'dense_head',  'point_head', 'roi_head'
         ]
@@ -27,7 +27,13 @@ class BevFusion(Detector3DTemplate):
     return {*}
     '''
     def build_radar_vfe(self,model_info_dict):  
-        radar_vfe_module = RadarPillarVFE(model_cfg=self.model_cfg.RADAR_VFE)
+        radar_vfe_module = RadarPillarVFE(model_cfg=self.model_cfg.RADAR_VFE,             
+                                            num_point_features=model_info_dict['num_rawpoint_features_radar'],
+                                            point_cloud_range=model_info_dict['point_cloud_range'],
+                                            voxel_size=model_info_dict['voxel_size_radar'],
+            )
+                
+        model_info_dict['num_point_features_radar'] = radar_vfe_module.get_output_feature_dim()
         model_info_dict['module_list'].append(radar_vfe_module)
         return  radar_vfe_module, model_info_dict
     
@@ -39,8 +45,16 @@ class BevFusion(Detector3DTemplate):
     return {*}
     '''
     def build_radar_map_to_bev(self,model_info_dict): 
-        radar_map_to_bev_module = RadarPointPillarScatter(model_cfg=self.model_cfg.RADAR_MAP_TO_BEV)
+        # radar_map_to_bev_module = RadarPointPillarScatter(model_cfg=self.model_cfg.RADAR_MAP_TO_BEV)
+        # model_info_dict['module_list'].append(radar_map_to_bev_module)
+        
+        radar_map_to_bev_module = RadarPointPillarScatter(
+            model_cfg=self.model_cfg.RADAR_MAP_TO_BEV,
+            grid_size=model_info_dict['grid_size_radar']
+        )
         model_info_dict['module_list'].append(radar_map_to_bev_module)
+        model_info_dict['num_bev_features_radar'] = radar_map_to_bev_module.num_bev_features
+        
         return radar_map_to_bev_module, model_info_dict
        
     def build_neck(self,model_info_dict):

@@ -49,6 +49,11 @@ class DatasetTemplate(torch_data.Dataset):
 
         self.grid_size = self.data_processor.grid_size
         self.voxel_size = self.data_processor.voxel_size
+        
+        # 毫米波信息
+        self.grid_size_radar = self.data_processor.grid_size_radar
+        self.voxel_size_radar = self.data_processor.voxel_size_radar
+        
         self.total_epochs = 0
         self._merge_all_iters_to_one_epoch = False
 
@@ -333,8 +338,11 @@ class DatasetTemplate(torch_data.Dataset):
                 else:
                     ret[key] = np.stack(val, axis=0)
             except:
-                print('Error in collate_batch: key=%s' % key)
-                # raise TypeError
+                if key in ['img_process_infos']:
+                    continue
+                else:
+                    print('Error in collate_batch: key=%s' % key)
+                    # raise TypeError
 
         ret['batch_size'] = batch_size * batch_size_ratio
         return ret
