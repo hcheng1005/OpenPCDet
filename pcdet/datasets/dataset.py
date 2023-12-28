@@ -27,10 +27,11 @@ class DatasetTemplate(torch_data.Dataset):
 
         self.point_cloud_range = np.array(self.dataset_cfg.POINT_CLOUD_RANGE, dtype=np.float32)
         
-        self.radar_point_feature_encoder = RadarPointFeatureEncoder(
-            self.dataset_cfg.RADAR_POINT_FEATURE_ENCODING,
-            point_cloud_range=self.point_cloud_range
-        )
+        if hasattr(self.dataset_cfg, "RADAR_POINT_FEATURE_ENCODING"):
+            self.radar_point_feature_encoder = RadarPointFeatureEncoder(
+                self.dataset_cfg.RADAR_POINT_FEATURE_ENCODING,
+                point_cloud_range=self.point_cloud_range
+            )
         
         self.point_feature_encoder = PointFeatureEncoder(
             self.dataset_cfg.POINT_FEATURE_ENCODING,

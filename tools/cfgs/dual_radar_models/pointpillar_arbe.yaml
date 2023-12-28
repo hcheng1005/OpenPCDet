@@ -3,7 +3,7 @@ CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist']
 DATA_CONFIG: 
     _BASE_CONFIG_: cfgs/dataset_configs/dual_radar_dataset_arbe.yaml
     # POINT_CLOUD_RANGE: [0, -39.68, -3, 69.12, 39.68, 1] 修改 我们是y轴朝前 -10距离修改 某一帧没有有效框
-    POINT_CLOUD_RANGE: [-39.68, -10, -3, 39.68, 92.4,  1]
+    POINT_CLOUD_RANGE: [-39.68, -10, -3, 39.68, 92.4,  1] # grid size =[496, 640] 
     DATA_PROCESSOR:
         - NAME: mask_points_and_boxes_outside_range
           REMOVE_OUTSIDE_BOXES: True
@@ -37,7 +37,7 @@ DATA_CONFIG:
 
               SAMPLE_GROUPS: ['Car:15','Pedestrian:15', 'Cyclist:15']
               #修改 特征数为6！
-              NUM_POINT_FEATURES: 5
+              NUM_POINT_FEATURES: 4
               DATABASE_WITH_FAKELIDAR: False
               REMOVE_EXTRA_WIDTH: [0.0, 0.0, 0.0]
               LIMIT_WHOLE_SCENE: False

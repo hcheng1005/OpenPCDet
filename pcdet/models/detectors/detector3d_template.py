@@ -41,10 +41,10 @@ class Detector3DTemplate(nn.Module):
             'point_cloud_range': self.dataset.point_cloud_range,
             'voxel_size': self.dataset.voxel_size,
             'depth_downsample_factor': self.dataset.depth_downsample_factor,
-            'num_rawpoint_features_radar': self.dataset.radar_point_feature_encoder.num_point_features,
-            'num_point_features_radar': self.dataset.radar_point_feature_encoder.num_point_features,
-            'grid_size_radar': self.dataset.grid_size_radar,
-            'voxel_size_radar': self.dataset.voxel_size_radar,
+            # 'num_rawpoint_features_radar': self.dataset.radar_point_feature_encoder.num_point_features,
+            # 'num_point_features_radar': self.dataset.radar_point_feature_encoder.num_point_features,
+            # 'grid_size_radar': self.dataset.grid_size_radar,
+            # 'voxel_size_radar': self.dataset.voxel_size_radar,
         }
         for module_name in self.module_topology:
             module, model_info_dict = getattr(self, 'build_%s' % module_name)(

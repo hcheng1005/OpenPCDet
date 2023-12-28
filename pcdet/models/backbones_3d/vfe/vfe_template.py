@@ -9,7 +9,7 @@ class VFETemplate(nn.Module):
     def get_output_feature_dim(self):
         raise NotImplementedError
 
-    def forward(self, **kwargs):
+    def forward(self, batch_dict, **kwargs):
         """
         Args:
             **kwargs:
