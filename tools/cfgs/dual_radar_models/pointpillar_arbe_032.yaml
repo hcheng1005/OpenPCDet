@@ -15,7 +15,7 @@ DATA_CONFIG:
           }
 
         - NAME: transform_points_to_voxels
-          VOXEL_SIZE: [0.16, 0.16, 0.1]
+          VOXEL_SIZE: [0.32, 0.32, 4]
           MAX_POINTS_PER_VOXEL: 32
           MAX_NUMBER_OF_VOXELS: {
             'train': 16000,
@@ -53,71 +53,84 @@ DATA_CONFIG:
               WORLD_SCALE_RANGE: [0.95, 1.05]
 
 MODEL:
-    NAME: CenterPoint
+    NAME: PointPillar
 
     VFE:
-        NAME: MeanVFE
-
-    BACKBONE_3D:
-        NAME: VoxelResBackBone8x
+        NAME: PillarVFE
+        WITH_DISTANCE: False
+        USE_ABSLOTE_XYZ: True
+        USE_NORM: True
+        NUM_FILTERS: [64]
 
     MAP_TO_BEV:
-        NAME: HeightCompression
-        NUM_BEV_FEATURES: 256
+        NAME: PointPillarScatter
+        NUM_BEV_FEATURES: 64
 
     BACKBONE_2D:
         NAME: BaseBEVBackbone
-
-        LAYER_NUMS: [5, 5]
-        LAYER_STRIDES: [1, 2]
-        NUM_FILTERS: [128, 256]
-        UPSAMPLE_STRIDES: [1, 2]
-        NUM_UPSAMPLE_FILTERS: [256, 256]
+        LAYER_NUMS: [3, 5, 5]
+        LAYER_STRIDES: [2, 2, 2]
+        NUM_FILTERS: [64, 128, 256]
+        UPSAMPLE_STRIDES: [1, 2, 4]
+        NUM_UPSAMPLE_FILTERS: [128, 128, 128]
 
     DENSE_HEAD:
-        NAME: CenterHead
+        NAME: AnchorHeadSingle
         CLASS_AGNOSTIC: False
 
-        CLASS_NAMES_EACH_HEAD: [
-          ['Car'], 
-          ['Pedestrian'], 
-          ['Cyclist']
+        USE_DIRECTION_CLASSIFIER: True
+        DIR_OFFSET: 0.78539
+        DIR_LIMIT_OFFSET: 0.0
+        NUM_DIR_BINS: 2
+
+        ANCHOR_GENERATOR_CONFIG: [
+            {
+                'class_name': 'Car',
+                'anchor_sizes': [[5, 2.1, 1.7]],
+                'anchor_rotations': [0, 1.57],
+                'anchor_bottom_heights': [-1.78],
+                'align_center': False,
+                'feature_map_stride': 2,
+                'matched_threshold': 0.6,
+                'unmatched_threshold': 0.45
+            },
+            {
+                'class_name': 'Pedestrian',
+                'anchor_sizes': [[0.7, 0.7, 1.7]],
+                'anchor_rotations': [0, 1.57],
+                'anchor_bottom_heights': [-0.6],
+                'align_center': False,
+                'feature_map_stride': 2,
+                'matched_threshold': 0.5,
+                'unmatched_threshold': 0.35
+            },
+            {
+                'class_name': 'Cyclist',
+                'anchor_sizes': [[1.8, 0.8, 1.6]],
+                'anchor_rotations': [0, 1.57],
+                'anchor_bottom_heights': [-0.6],
+                'align_center': False,
+                'feature_map_stride': 2,
+                'matched_threshold': 0.5,
+                'unmatched_threshold': 0.35
+            }
         ]
 
-        SHARED_CONV_CHANNEL: 64
-        USE_BIAS_BEFORE_NORM: True
-        NUM_HM_CONV: 2
-        SEPARATE_HEAD_CFG:
-            HEAD_ORDER: ['center', 'center_z', 'dim', 'rot']
-            HEAD_DICT: {
-                'center': {'out_channels': 2, 'num_conv': 2},
-                'center_z': {'out_channels': 1, 'num_conv': 2},
-                'dim': {'out_channels': 3, 'num_conv': 2},
-                'rot': {'out_channels': 2, 'num_conv': 2},
-            }
-
         TARGET_ASSIGNER_CONFIG:
-            FEATURE_MAP_STRIDE: 8
-            NUM_MAX_OBJS: 500
-            GAUSSIAN_OVERLAP: 0.1
-            MIN_RADIUS: 2
+            NAME: AxisAlignedTargetAssigner
+            POS_FRACTION: -1.0
+            SAMPLE_SIZE: 512
+            NORM_BY_NUM_EXAMPLES: False
+            MATCH_HEIGHT: False
+            BOX_CODER: ResidualCoder
 
         LOSS_CONFIG:
             LOSS_WEIGHTS: {
                 'cls_weight': 1.0,
-                'loc_weight': 1.0,
-                'code_weights': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+                'loc_weight': 2.0,
+                'dir_weight': 0.2,
+                'code_weights': [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
             }
-
-        POST_PROCESSING:
-            SCORE_THRESH: 0.1
-            POST_CENTER_LIMIT_RANGE: [-51.2, -25.6, -4.0, 51.2, 25.6, 2.0]
-            MAX_OBJ_PER_SAMPLE: 500
-            NMS_CONFIG:
-                NMS_TYPE: nms_gpu
-                NMS_THRESH: 0.3
-                NMS_PRE_MAXSIZE: 4096
-                NMS_POST_MAXSIZE: 500
 
     POST_PROCESSING:
         RECALL_THRESH_LIST: [0.3, 0.5, 0.7]
@@ -136,7 +149,7 @@ MODEL:
 
 OPTIMIZATION:
     BATCH_SIZE_PER_GPU: 16
-    NUM_EPOCHS: 180
+    NUM_EPOCHS: 120
 
     OPTIMIZER: adam_onecycle
     LR: 0.003
@@ -154,7 +167,4 @@ OPTIMIZATION:
     WARMUP_EPOCH: 1
 
     GRAD_NORM_CLIP: 10
-
-
-    # CUDA_VISIBLE_DEVICES=3 python train.py --cfg_file=cfgs/dual_radar_models/centerpoint_arbe.yaml
-
+    #CUDA_VISIBLE_DEVICES=2,4,5,6,7  python -m torch.distributed.launch --nproc_per_node=5 --master_port 28125 train.py --launcher pytorch --cfg_file cfgs/mine_models/pointpillar.yaml --extra_tag 'mine_pointpillars'

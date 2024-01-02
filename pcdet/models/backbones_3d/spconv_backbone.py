@@ -290,6 +290,8 @@ class VoxelResBackBone8x(nn.Module):
 
         # for detection head
         # [200, 176, 5] -> [200, 176, 2]
+        # print(x_conv4.dense().shape)
+        
         out = self.conv_out(x_conv4)
 
         batch_dict.update({
