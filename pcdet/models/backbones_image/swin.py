@@ -715,6 +715,9 @@ class SwinTransformer(nn.Module):
     def forward(self, batch_dict):
         x = batch_dict['camera_imgs']
         B, N, C, H, W = x.size()
+        
+        # print('camera_imgs:', x.size())
+        
         x = x.view(B * N, C, H, W)
         x, hw_shape = self.patch_embed(x)
 
@@ -731,6 +734,10 @@ class SwinTransformer(nn.Module):
                 out = out.view(-1, *out_hw_shape,
                                self.num_features[i]).permute(0, 3, 1,
                                                              2).contiguous()
+                               
+                # print('image_features:', out.shape)
                 outs.append(out)
         batch_dict['image_features'] = outs
+        
+        # print('image_features:', outs)
         return batch_dict

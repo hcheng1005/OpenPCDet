@@ -15,12 +15,20 @@ def get_calib_from_file(calib_file):
     Tr_arbe_to_velo = np.array(obj, dtype=np.float32)
     obj = lines[4].strip().split(' ')[1:]
     Tr_ars_to_velo = np.array(obj, dtype=np.float32)
+    
+    obj = lines[5].strip().split(' ')[1:]
+    Tr_arbe_to_cam = np.array(obj, dtype=np.float32)
+    
+    obj = lines[6].strip().split(' ')[1:]
+    Tr_ars_to_cam = np.array(obj, dtype=np.float32)
 
     return {'P2': P2.reshape(3, 4),
             'Tr_arbe2velo': Tr_arbe_to_velo.reshape(3, 4),
             'Tr_ars2velo': Tr_ars_to_velo.reshape(3, 4),
             'R0': R0.reshape(3, 3),
-            'Tr_velo2cam': Tr_velo_to_cam.reshape(3, 4)}
+            'Tr_velo2cam': Tr_velo_to_cam.reshape(3, 4),
+            'Tr_arbe_to_cam': Tr_arbe_to_cam.reshape(3, 4),
+            'Tr_ars_to_cam': Tr_ars_to_cam.reshape(3, 4)}
 
 
 class Calibration(object):
@@ -36,6 +44,8 @@ class Calibration(object):
         #修改4 增加毫米波的转换矩阵
         self.ARBE2V = calib['Tr_arbe2velo'] # 3 x4
         self.ARS2V = calib['Tr_ars2velo'] # 3 * 4_
+        self.ARBE2C = calib['Tr_arbe_to_cam'] # 3 x4
+        self.ARS2C = calib['Tr_ars_to_cam'] # 3 * 4_
 
         # Camera intrinsics and extrinsics
         self.cu = self.P2[0, 2]

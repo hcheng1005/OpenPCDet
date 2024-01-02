@@ -69,6 +69,7 @@ class GeneralizedLSSFPN(nn.Module):
             laterals[i] = torch.cat([laterals[i], x], dim=1)
             laterals[i] = self.lateral_convs[i](laterals[i])
             laterals[i] = self.fpn_convs[i](laterals[i])
+            # print('image_fpn: ', i , ', ', laterals[i].shape)
 
         # build outputs
         outs = [laterals[i] for i in range(used_backbone_levels)]

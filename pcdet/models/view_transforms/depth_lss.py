@@ -29,8 +29,11 @@ class DepthLSSTransform(nn.Module):
         zbound = self.model_cfg.ZBOUND
         self.dbound = self.model_cfg.DBOUND
         downsample = self.model_cfg.DOWNSAMPLE
+        
+        self.image_nums = self.model_cfg.IMAGE_NUMS
 
-        dx, bx, nx = gen_dx_bx(xbound, ybound, zbound)
+        dx, bx, nx = gen_dx_bx(xbound, ybound, zbound)   
+  
         self.dx = nn.Parameter(dx, requires_grad=False)
         self.bx = nn.Parameter(bx, requires_grad=False)
         self.nx = nn.Parameter(nx, requires_grad=False)
@@ -85,6 +88,9 @@ class DepthLSSTransform(nn.Module):
         ys = torch.linspace(0, iH - 1, fH, dtype=torch.float).view(1, fH, 1).expand(D, fH, fW)
         frustum = torch.stack((xs, ys, ds), -1)
         
+        # print('create_frustum: ', xs.shape, ', ', ys.shape, ', ', ds.shape)
+        # create_frustum:  torch.Size([118, 32, 88]) ,  torch.Size([118, 32, 88]) ,  torch.Size([118, 32, 88])
+        
         return nn.Parameter(frustum, requires_grad=False)
 
     def get_geometry(self, camera2lidar_rots, camera2lidar_trans, intrins, post_rots, post_trans, **kwargs):
@@ -94,9 +100,15 @@ class DepthLSSTransform(nn.Module):
         intrins = intrins.to(torch.float)
         post_rots = post_rots.to(torch.float)
         post_trans = post_trans.to(torch.float)
+       
+        if self.image_nums > 1:
+            B, N, _ = camera2lidar_trans.shape
+        else:   
+            N = 1
+            B, _ = camera2lidar_trans.shape
 
-        B, N, _ = camera2lidar_trans.shape
-
+        # print('self.frustum: ', self.frustum.shape)  # torch.Size([118, 32, 88, 3])
+        
         # undo post-transformation
         # B x N x D x H x W x 3
         points = self.frustum - post_trans.view(B, N, 1, 1, 1, 3)
@@ -134,6 +146,8 @@ class DepthLSSTransform(nn.Module):
         geom_feats = geom_feats.view(Nprime, 3)
         batch_ix = torch.cat([torch.full([Nprime // B, 1], ix, device=x.device, dtype=torch.long) for ix in range(B)])
         geom_feats = torch.cat((geom_feats, batch_ix), 1)
+        
+        # print('Orin geom_feats: ', geom_feats.shape)
 
         # filter out points that are outside box
         kept = (
@@ -146,6 +160,9 @@ class DepthLSSTransform(nn.Module):
         )
         x = x[kept]
         geom_feats = geom_feats[kept]
+        
+        # print('before bev_pool x : ', x.shape)
+        # print('before bev_pool geom_feats: ', geom_feats.shape)
         x = bev_pool(x, geom_feats, B, self.nx[2], self.nx[0], self.nx[1])
 
         # collapse Z
@@ -158,15 +175,26 @@ class DepthLSSTransform(nn.Module):
 
         d = d.view(B * N, *d.shape[2:])
         x = x.view(B * N, C, fH, fW)
-
+        
         d = self.dtransform(d)
         x = torch.cat([d, x], dim=1)
         x = self.depthnet(x)
+        
+        # print('After depthnet: ', x.shape)
+        # After depthnet:  torch.Size([4, 198, 32, 88])
 
         depth = x[:, : self.D].softmax(dim=1)
+        # print('depth.unsqueeze(1): ', depth.unsqueeze(1).shape) 
+        # depth.unsqueeze(1):  torch.Size([4, 1, 118, 32, 88])
+        
         x = depth.unsqueeze(1) * x[:, self.D : (self.D + self.C)].unsqueeze(2)
 
+        # print('Before view: ', x.shape)
+        
         x = x.view(B, N, self.C, self.D, fH, fW)
+        
+        # print('Before permute: ', x.shape)
+        
         x = x.permute(0, 1, 3, 4, 5, 2)
         return x
 
@@ -183,13 +211,25 @@ class DepthLSSTransform(nn.Module):
         x = batch_dict['image_fpn'] 
         x = x[0]
         BN, C, H, W = x.size()
-        img = x.view(int(BN/6), 6, C, H, W)
-
-        camera_intrinsics = batch_dict['camera_intrinsics']
-        camera2lidar = batch_dict['camera2lidar']
-        img_aug_matrix = batch_dict['img_aug_matrix']
-        lidar_aug_matrix = batch_dict['lidar_aug_matrix']
-        lidar2image = batch_dict['lidar2image']
+        
+        if self.image_nums > 1:
+            img = x.view(int(BN/self.image_nums), self.image_nums, C, H, W)
+        else:
+            img = x.view(BN, self.image_nums, C, H, W)  
+        
+        # print(batch_dict.keys())
+        
+        camera_intrinsics = batch_dict['camera_intrinsics']     # 相机外参
+        camera2lidar = batch_dict['camera2arbe']
+        img_aug_matrix = batch_dict['img_aug_matrix']           # not used
+        lidar_aug_matrix = batch_dict['lidar_aug_matrix']       # not used
+        lidar2image = batch_dict['arbe2image']
+        
+        # camera_intrinsics = batch_dict['camera_intrinsics']     # 相机外参
+        # camera2lidar = batch_dict['camera2lidar']
+        # img_aug_matrix = batch_dict['img_aug_matrix']           # not used
+        # lidar_aug_matrix = batch_dict['lidar_aug_matrix']       # not used
+        # lidar2image = batch_dict['lidar2image']
 
         intrins = camera_intrinsics[..., :3, :3]
         post_rots = img_aug_matrix[..., :3, :3]
@@ -199,7 +239,10 @@ class DepthLSSTransform(nn.Module):
 
         points = batch_dict['points']
 
-        batch_size = BN // 6
+        if self.image_nums > 1:
+            batch_size = BN // self.image_nums
+        else:
+            batch_size = BN  # 使用一个前视摄像头
         depth = torch.zeros(batch_size, img.shape[1], 1, *self.image_size).to(points[0].device)
 
         for b in range(batch_size):
@@ -249,10 +292,20 @@ class DepthLSSTransform(nn.Module):
             post_trans, extra_rots=extra_rots, extra_trans=extra_trans,
         )
         # use points depth to assist the depth prediction in images
+
         x = self.get_cam_feats(img, depth)
+        # print('After get_cam_feats: ', x.shape)   # torch.Size([4, 1, 118, 32, 88, 80])
+        
         x = self.bev_pool(geom, x)
+        # print('After bev_pool: ', x.shape)
+        
         x = self.downsample(x)
+        # print('After downsample: ', x.shape)
+        
         # convert bev features from (b, c, x, y) to (b, c, y, x)
         x = x.permute(0, 1, 3, 2)
         batch_dict['spatial_features_img'] = x
+        
+        # print('spatial_features_img:', x.shape)
+        
         return batch_dict

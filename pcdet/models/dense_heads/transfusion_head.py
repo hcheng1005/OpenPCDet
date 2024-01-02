@@ -97,7 +97,7 @@ class TransFusionHead(nn.Module):
         self.loss_heatmap = loss_utils.GaussianFocalLoss()
         self.loss_heatmap_weight = self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS['hm_weight']
 
-        self.code_size = 10
+        self.code_size = self.model_cfg.NUM_HEADS  # 10 with vel； 8 without vel
 
         # a shared convolution
         self.shared_conv = nn.Conv2d(in_channels=input_channels,out_channels=hidden_channel,kernel_size=3,padding=1)
@@ -198,7 +198,7 @@ class TransFusionHead(nn.Module):
             local_max[ :, 1, ] = F.max_pool2d(heatmap[:, 1], kernel_size=1, stride=1, padding=0)
             local_max[ :, 2, ] = F.max_pool2d(heatmap[:, 2], kernel_size=1, stride=1, padding=0)
         heatmap = heatmap * (heatmap == local_max)
-        heatmap = heatmap.view(batch_size, heatmap.shape[1], -1)
+        heatmap = heatmap.view(batch_size, heatmap.shape[1], -1) # [1,10,32400]
  
         # top num_proposals among all classes
         # 获取top k个feature
@@ -230,7 +230,7 @@ class TransFusionHead(nn.Module):
             dim=1,
         )
         # convert to xy
-        query_pos = query_pos.flip(dims=[-1])
+        query_pos = query_pos.flip(dims=[-1])  
         bev_pos = bev_pos.flip(dims=[-1])
 
         # print(f"query_feat shape: {query_feat.shape}")
@@ -240,9 +240,11 @@ class TransFusionHead(nn.Module):
         '''
         query_feat shape: torch.Size([1, 128, 200])
         lidar_feat_flatten shape: torch.Size([1, 128, 32400])
-        query_pos shape: torch.Size([1, 200, 2])
+        query_pos shape: torch.Size([1, 200, 2]) 此处的200是目标最大检出个数 2指的是xy坐标
         bev_pos shape: torch.Size([1, 32400, 2])
         '''
+        
+        # forward(self, query, key, query_pos, key_pos, key_padding_mask=None, attn_mask=None):
         query_feat = self.decoder(
             query_feat, lidar_feat_flatten, query_pos, bev_pos
         )
@@ -437,15 +439,14 @@ class TransFusionHead(nn.Module):
         return loss_all,loss_dict
 
     def encode_bbox(self, bboxes):
-        code_size = 10
-        targets = torch.zeros([bboxes.shape[0], code_size]).to(bboxes.device)
+        targets = torch.zeros([bboxes.shape[0], self.code_size]).to(bboxes.device)
         targets[:, 0] = (bboxes[:, 0] - self.point_cloud_range[0]) / (self.feature_map_stride * self.voxel_size[0])
         targets[:, 1] = (bboxes[:, 1] - self.point_cloud_range[1]) / (self.feature_map_stride * self.voxel_size[1])
         targets[:, 3:6] = bboxes[:, 3:6].log()
         targets[:, 2] = bboxes[:, 2]
         targets[:, 6] = torch.sin(bboxes[:, 6])
         targets[:, 7] = torch.cos(bboxes[:, 6])
-        if code_size == 10:
+        if self.code_size == 10:
             targets[:, 8:10] = bboxes[:, 7:]
         return targets
 

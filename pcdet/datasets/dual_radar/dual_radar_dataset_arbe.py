@@ -202,8 +202,34 @@ class DualradarDataset_ARBE(DatasetTemplate):
             R0_4x4[:3, :3] = calib.R0
             V2C_4x4 = np.concatenate([calib.V2C, np.array([[0., 0., 0., 1.]])], axis=0)
             calib_info = {'P2': P2, 'R0_rect': R0_4x4, 'Tr_velo_to_cam': V2C_4x4}
-
+            
+            # 获取各传感器转换矩阵
             info['calib'] = calib_info
+            info['camera_intrinsics'] = P2   
+            
+            # sensor to camera transform
+            sensor2camera_r = calib.V2C[:3,:3]
+            sensor2camera_t = calib.V2C[:3, 3:4]
+            camera2sensor = np.eye(4).astype(np.float32)
+            camera2sensor[:3, :3] = sensor2camera_r.T
+            camera2sensor[3, :3] = -sensor2camera_t.reshape([1,3])
+            info['camera2lidar']= camera2sensor.T
+            
+            sensor2camera_r = calib.ARBE2C[:3,:3]
+            sensor2camera_t = calib.ARBE2C[:3, 3:4]
+            camera2sensor = np.eye(4).astype(np.float32)
+            camera2sensor[:3, :3] = sensor2camera_r.T
+            camera2sensor[3, :3] = -sensor2camera_t.reshape([1,3])
+            info['camera2arbe'] = camera2sensor.T
+            
+            # sensor to image transform
+            lidar2image = np.eye(4).astype(np.float32)
+            lidar2image[:3, :3] = calib.P2 @ calib.V2C.T
+            info['lidar2image'] = lidar2image.reshape([1,4,4])
+            
+            arbe2image = np.eye(4).astype(np.float32)
+            arbe2image[:3, :3] = calib.P2 @ calib.ARBE2C.T
+            info['arbe2image'] = arbe2image.reshape([1,4,4])
 
             if has_label:
                 obj_list = self.get_label(sample_idx)
@@ -505,6 +531,11 @@ class DualradarDataset_ARBE(DatasetTemplate):
         # print(input_dict.keys())
         if self.use_camera:
             input_dict = self.get_image(sample_idx, input_dict)
+            # for bevfusion
+            input_dict['camera_intrinsics'] = info['camera_intrinsics']
+            input_dict['camera2arbe'] = info['camera2arbe']
+            input_dict['lidar2image'] = info['lidar2image']
+            input_dict['arbe2image'] = info['arbe2image']
         
         # print(input_dict.keys()) 
         data_dict = self.prepare_data(data_dict=input_dict)
