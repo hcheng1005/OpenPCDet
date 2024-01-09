@@ -61,10 +61,14 @@ class DualradarDataset(DatasetTemplate):
         self.sample_id_list = [x.strip() for x in open(split_dir).readlines()] if split_dir.exists() else None
 
     def get_lidar(self, idx):
-        lidar_file = self.root_split_path / 'velodyne' / ('%s.bin' % idx)
+        lidar_file = self.root_split_path / 'robosense' / ('%s.bin' % idx)
         assert lidar_file.exists()
         #修改1  点数变为6
-        return np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, 6)
+        data = np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, 6)
+        data = data[~np.isnan(data).any(axis=1), :]
+        return  data
+    
+    
     
     def get_image(self, idx):
         """
@@ -487,7 +491,7 @@ class DualradarDataset(DatasetTemplate):
         return data_dict
 
 
-def create_dual_radar_infos(dataset_cfg, class_names, data_path, save_path, workers=16):
+def create_dual_radar_infos(dataset_cfg, class_names, data_path, save_path, workers=32):
     dataset = DualradarDataset(dataset_cfg=dataset_cfg, class_names=class_names, root_path=data_path, training=False)
     train_split, val_split = 'train', 'val'
 
