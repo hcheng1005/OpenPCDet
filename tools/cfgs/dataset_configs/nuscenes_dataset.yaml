@@ -1,5 +1,5 @@
 DATASET: 'NuScenesDataset'
-DATA_PATH: '/data/chenghao/mycode/private/OpenPCDet/data/nuscenes'
+DATA_PATH: '/root/code/OpenPCDet/data/nuscenes'
 
 VERSION: 'v1.0-mini'
 MAX_SWEEPS: 10
