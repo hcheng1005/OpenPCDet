@@ -1,6 +1,7 @@
 #修改 数据集名称和路径改成自己
 DATASET: 'DualradarDataset_ARBE'
-DATA_PATH: '/root/autodl-tmp/code/OpenPCDet/data/dual_radar/radar_arbe'
+# DATA_PATH: '/root/autodl-tmp/code/OpenPCDet/data/dual_radar/radar_arbe'
+DATA_PATH: '/home/charles/code/OpenPCDet/data/dual_radar/radar_arbe'
 
 POINT_CLOUD_RANGE: [-40, -10, -3, 40, 60.4,  1]
 

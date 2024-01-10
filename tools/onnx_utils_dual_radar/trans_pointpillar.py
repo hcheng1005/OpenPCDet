@@ -1,3 +1,9 @@
+'''
+Date: 2023-12-28 20:30:24
+LastEditors: CharlesHAO hcheng1005@gmail.com
+LastEditTime: 2024-01-09 20:47:28
+FilePath: /OpenPCDet/tools/onnx_utils_dual_radar/trans_pointpillar.py
+'''
 import os
 import argparse
 
@@ -226,9 +232,17 @@ class AnchorHeadSingle(AnchorHeadTemplate):
     
     
 
+'''
+name: pointpillars
+description: 重新定义pointpillars模型
+return {*}
+'''
 class pointpillars(nn.Module):
     def __init__(self, cfg, grid_size):
         super().__init__()
+        '''
+        以下模型全都重新定义 PillarVFE PointPillarScatter BaseBEVBackbone AnchorHeadSingle
+        '''
         self.vfe = PillarVFE(model_cfg=cfg.MODEL.VFE,
                             num_point_features=cfg.DATA_CONFIG.DATA_AUGMENTOR.AUG_CONFIG_LIST[0]['NUM_POINT_FEATURES'],
                             point_cloud_range=cfg.DATA_CONFIG.POINT_CLOUD_RANGE,  
@@ -254,9 +268,16 @@ class pointpillars(nn.Module):
         return box_preds, cls_preds, dir_cls_preds
 
 
+'''
+name: build_pointpillars
+description: 由于新版openpcdet无法直接使用onnx导出模型，因此这里重新定义point pillars模型
+param {*} ckpt
+param {*} cfg
+return {*}
+'''
 def build_pointpillars(ckpt,cfg):
     grid_size = np.array([496, 640, 1])
-    model =pointpillars(cfg, grid_size)  
+    model = pointpillars(cfg, grid_size)  
 
     model.to('cuda').eval()
 
@@ -304,6 +325,8 @@ if __name__ == "__main__":
     model, dummy_input = build_pointpillars(filename_mh, cfg)
     model.eval().cuda()
     export_onnx_file = "./onnx_utils_dual_radar/arbe_pp_raw.onnx"
+    
+    # 导出pp模型
     torch.onnx.export(model,
                     dummy_input,
                     export_onnx_file,
@@ -315,13 +338,11 @@ if __name__ == "__main__":
                     output_names = ['cls_preds', 'box_preds', 'dir_cls_preds'])# the model's output names
     
     onnx_raw = onnx.load("./onnx_utils_dual_radar/arbe_pp_raw.onnx")  # load onnx model
-    onnx_trim_post = simplify_postprocess(onnx_raw)
+    onnx_trim_post = simplify_postprocess(onnx_raw) # 简化后处理
     
-    onnx_simp, check = simplify(onnx_trim_post)
+    onnx_simp, check = simplify(onnx_trim_post) # 模型简化（库函数）
     assert check, "Simplified ONNX model could not be validated"
 
-    onnx_final = simplify_preprocess(onnx_simp)
+    onnx_final = simplify_preprocess(onnx_simp) # 前处理简化
     onnx.save(onnx_final, "./onnx_utils_dual_radar/arbe_pp.onnx")
     print('finished exporting onnx')
-
-    # logger.info('[PASS] ONNX EXPORTED.')
