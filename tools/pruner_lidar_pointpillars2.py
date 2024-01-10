@@ -1,4 +1,3 @@
-
 import os
 import argparse
 import re
@@ -337,32 +336,7 @@ if __name__ == "__main__":
     input_dict = next(iter(demo_dataset))
     input_dict = demo_dataset.collate_batch([input_dict])
     load_data_to_gpu(input_dict)
-    
-    
-    with torch.no_grad():
-      MAX_VOXELS = 10000
-      dummy_voxels = torch.zeros(
-          (MAX_VOXELS, 32, 4),
-          dtype=torch.float32,
-          device='cuda:0')
-      dummy_voxel_idxs = torch.zeros(
-          (MAX_VOXELS, 4),
-          dtype=torch.int32,
-          device='cuda:0')
-      dummy_voxel_num = torch.zeros(
-          (1),
-          dtype=torch.int32,
-          device='cuda:0')
-
-        # pytorch don't support dict when export model to onnx.
-        # so here is something to change in networek input and output, the dict input --> list input
-        # here is three part onnx export from OpenPCDet codebase:
-      dummy_input = [dummy_voxels, dummy_voxel_num, dummy_voxel_idxs]
-      
-    MAX_VOXELS = 10000
-    # summary(model, input_data = input_dict)
-    summary(model, input_size=[(), (MAX_VOXELS, 32, 4),(1,), (MAX_VOXELS, 4)])
-                
+                    
     # —————————————— 以下是剪枝模块代码 —————————————— # 
     # 剪枝前模型参数量
     unpruned_total_params = sum(p.numel() for p in model.parameters())
@@ -393,6 +367,8 @@ if __name__ == "__main__":
             continue
         
     pruned_total_params = sum(p.numel() for p in model.parameters())
+    print("unpruned_total_params: ", unpruned_total_params)
+    print("pruned_total_params: ", pruned_total_params)
     print("Pruning ratio: {}".format(pruned_total_params / unpruned_total_params))
     print(model)
     # —————————————— 剪枝流程结束 —————————————— # 
@@ -403,7 +379,7 @@ if __name__ == "__main__":
     # torch.save(stat_, './pruned_pp.pth', _use_new_zipfile_serialization=False)
         
     # 剪枝后评估模型效果
-    eval_model(model, cfg, args, logger)
+    # eval_model(model, cfg, args, logger)
         
     # # 重新训练
     # re_trainModel(model)
