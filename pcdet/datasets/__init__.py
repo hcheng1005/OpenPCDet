@@ -6,7 +6,7 @@ from torch.utils.data import DistributedSampler as _DistributedSampler
 from pcdet.utils import common_utils
 
 from .dataset import DatasetTemplate
-# from .kitti.kitti_dataset import KittiDataset
+from .kitti.kitti_dataset import KittiDataset
 # from .nuscenes.nuscenes_dataset import NuScenesDataset
 # from .waymo.waymo_dataset import WaymoDataset
 # from .pandaset.pandaset_dataset import PandasetDataset
@@ -22,7 +22,7 @@ from .dual_radar.dual_radar_dataset_ars548 import DualradarDataset_ARS548
 
 __all__ = {
     'DatasetTemplate': DatasetTemplate,
-    # 'KittiDataset': KittiDataset,
+    'KittiDataset': KittiDataset,
     # 'NuScenesDataset': NuScenesDataset,
     # 'WaymoDataset': WaymoDataset,
     # 'PandasetDataset': PandasetDataset,

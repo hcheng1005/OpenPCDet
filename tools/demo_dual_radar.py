@@ -40,7 +40,7 @@ class DemoDataset(DatasetTemplate):
 
     def __getitem__(self, index):
         points = np.fromfile(
-            self.sample_file_list[index], dtype=np.float32, count=-1).reshape([-1, 5])
+            self.sample_file_list[index], dtype=np.float32, count=-1).reshape([-1, 6])
         
         print(points.shape)
 
@@ -57,9 +57,13 @@ class DemoDataset(DatasetTemplate):
 
 
 def parse_config():
-    data_path="/home/charles/code/dataset/dual_radar/testing_arbe/arbe/"
-    cfg_ = "cfgs/dual_radar_models/pointpillar_arbe.yaml"
-    ckpt_ = "ckpt/dual_radar/pointpillars_arbe_80.pth"
+    # data_path="/home/charles/code/dataset/dual_radar/testing_arbe/arbe/"
+    # cfg_ = "cfgs/dual_radar_models/pointpillar_arbe.yaml"
+    # ckpt_ = "ckpt/dual_radar/pointpillars_arbe_80.pth"
+    
+    data_path="/root/autodl-tmp/code/OpenPCDet/data/dual_radar/lidar/testing/robosense/"
+    cfg_ = "cfgs/dual_radar_models/pointpillar_lidar.yaml"
+    ckpt_ = "ckpt/dual_radar/pointpillars_liadr_80.pth"
 
     parser = argparse.ArgumentParser(description='arg parser')
     parser.add_argument('--cfg_file', type=str, default=cfg_,

@@ -63,10 +63,10 @@ class DualradarDataset(DatasetTemplate):
     def get_lidar(self, idx):
         lidar_file = self.root_split_path / 'robosense' / ('%s.bin' % idx)
         assert lidar_file.exists()
-        #修改1  点数变为6
-        data = np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, 6)
-        data = data[~np.isnan(data).any(axis=1), :]
-        return  data
+        # #修改1  点数变为6
+        # data = np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, 6)
+        # data = data[~np.isnan(data).any(axis=1), :]
+        return np.fromfile(str(lidar_file), dtype=np.float32).reshape(-1, 6)
     
     
     
@@ -405,6 +405,7 @@ class DualradarDataset(DatasetTemplate):
                         print(dets[k], k)
                         raise
             return dets
+        print(self.dual_radar_infos)
         if 'annos' not in self.dual_radar_infos[0].keys():
             return None, {}
 

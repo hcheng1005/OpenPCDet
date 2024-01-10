@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Torch Pruning module."""
-from .dependency import *  # noqa: F401, F403
-from .prune import *  # noqa: F401, F403
-from . import utils, prune_config  # noqa: F401
+"""Root module for PyTorch model pruning."""
+
+from .version import __version__  # noqa: F401
+from .prune_config import PruneConfig  # noqa: F401

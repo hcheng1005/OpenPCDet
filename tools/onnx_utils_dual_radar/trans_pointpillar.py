@@ -1,7 +1,7 @@
 '''
 Date: 2023-12-28 20:30:24
 LastEditors: CharlesHAO hcheng1005@gmail.com
-LastEditTime: 2024-01-09 20:47:28
+LastEditTime: 2024-01-10 21:53:12
 FilePath: /OpenPCDet/tools/onnx_utils_dual_radar/trans_pointpillar.py
 '''
 import os
@@ -14,6 +14,8 @@ import numpy as np
 
 from pathlib import Path
 from onnxsim import simplify
+
+from torchinfo import summary
 
 import torch
 import torch.nn as nn
@@ -96,8 +98,8 @@ class PillarVFE(VFETemplate):
         paddings_indicator = actual_num.int() > max_num
         return paddings_indicator
     
-    def forward(self, batch_dict, **kwargs):
-        voxel_features, voxel_num_points, coords  = batch_dict[0], batch_dict[1], batch_dict[2]
+    def forward(self, voxel_features, voxel_num_points, coords, **kwargs):
+        # voxel_features, voxel_num_points, coords  = batch_dict[0], batch_dict[1], batch_dict[2]
         points_mean = voxel_features[:, :, :3].sum(dim=1, keepdim=True) / voxel_num_points.type_as(voxel_features).view(-1, 1, 1)
         f_cluster = voxel_features[:, :, :3] - points_mean
         f_center = torch.zeros_like(voxel_features[:, :, :3])
@@ -260,9 +262,9 @@ class pointpillars(nn.Module):
                                             point_cloud_range=cfg.DATA_CONFIG.POINT_CLOUD_RANGE,
                                             predict_boxes_when_training=False)
 
-    def forward(self, batch_dict):
-        features = self.vfe.forward(batch_dict)
-        spatial_features = self.map_to_bev.forward(features, batch_dict[2])
+    def forward(self, voxel_features, voxel_num_points, coords):
+        features = self.vfe.forward(voxel_features, voxel_num_points, coords)
+        spatial_features = self.map_to_bev.forward(features, coords)
         spatial_features_2d = self.backbone_2d.forward(spatial_features)
         box_preds, cls_preds, dir_cls_preds = self.dense_head.forward(spatial_features_2d)
         return box_preds, cls_preds, dir_cls_preds
@@ -310,7 +312,7 @@ def build_pointpillars(ckpt,cfg):
         # pytorch don't support dict when export model to onnx.
         # so here is something to change in networek input and output, the dict input --> list input
         # here is three part onnx export from OpenPCDet codebase:
-      dummy_input = [dummy_voxels, dummy_voxel_num, dummy_voxel_idxs]
+      dummy_input = (dummy_voxels, dummy_voxel_num, dummy_voxel_idxs)
     return model , dummy_input
 
 if __name__ == "__main__":
@@ -323,6 +325,9 @@ if __name__ == "__main__":
     export_paramters(cfg)
     model_cfg=cfg.MODEL
     model, dummy_input = build_pointpillars(filename_mh, cfg)
+    summary(model, input_size=[(10000, 32, 4), (1,), (10000, 4)], depth = 5)
+    # summary(model, input_data=dummy_input)
+    
     model.eval().cuda()
     export_onnx_file = "./onnx_utils_dual_radar/arbe_pp_raw.onnx"
     
