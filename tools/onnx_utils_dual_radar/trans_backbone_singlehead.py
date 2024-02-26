@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from pcdet.config import cfg, cfg_from_yaml_file
-from pcdet.models.backbones_3d.vfe.vfe_template import VFETemplate
+# from pcdet.models.backbones_3d.vfe.vfe_template import VFETemplate
 from onnx_backbone_2d import BaseBEVBackbone
 # from onnx_dense_head import SingleHead
 
@@ -61,14 +61,18 @@ class AnchorHeadSingle(AnchorHeadTemplate):
         nn.init.normal_(self.conv_box.weight, mean=0, std=0.001)
 
     def forward(self, spatial_features_2d):
-        # spatial_features_2d = data_dict['spatial_features_2d'] # （4，384，248，216）
         cls_preds = self.conv_cls(spatial_features_2d) # 每个anchor的类别预测-->(4,18,248,216)
         box_preds = self.conv_box(spatial_features_2d) # 每个anchor的box预测-->(4,42,248,216)
+
         cls_preds = cls_preds.permute(0, 2, 3, 1).contiguous()  
-        box_preds = box_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C] -->(4,248,216,42)
+        box_preds = box_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C] -->(4,248,216,42) 
         dir_cls_preds = self.conv_dir_cls(spatial_features_2d) # 每个anchor的方向预测-->(4,12,248,216)
         dir_cls_preds = dir_cls_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C] -->(4,248,216,12)
-        return box_preds, cls_preds, dir_cls_preds
+
+        batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(batch_size=1,
+            cls_preds=cls_preds, box_preds=box_preds, dir_cls_preds=dir_cls_preds
+        ) 
+        return batch_cls_preds, batch_box_preds
     
     
 
@@ -86,8 +90,8 @@ class backbone_singlehead(nn.Module):
 
     def forward(self, spatial_features):
         spatial_features_2d = self.backbone_2d.forward(spatial_features)
-        box_preds, cls_preds, dir_cls_preds = self.dense_head.forward(spatial_features_2d)
-        return box_preds, cls_preds, dir_cls_preds
+        box_preds, cls_preds = self.dense_head.forward(spatial_features_2d)
+        return box_preds, cls_preds
 
 
 def build_backbone_singlehead(ckpt,cfg):
@@ -121,18 +125,18 @@ if __name__ == "__main__":
     model, dummy_input = build_backbone_singlehead(filename_mh, cfg)
     model.eval().cuda()
     export_onnx_file = "./onnx_utils_dual_radar/arbe_pp_backbone2.onnx"
-    torch.onnx.export(model,
-                    dummy_input,
-                    export_onnx_file,
-                    opset_version=10, # v10 is better than v12
-                    verbose=True,
-                    do_constant_folding=True,
-                    input_names = ['features'],   # the model's input names
-                    output_names = ['box_preds', 'cls_preds', 'dir_cls_preds']) # the model's output names)   # the model's input names) # 输出名
-    
     # torch.onnx.export(model,
-    #                   dummy_input,
-    #                   export_onnx_file,
-    #                   opset_version=10,
-    #                   verbose=True,
-    #                   do_constant_folding=True) # 输出名
+    #                 dummy_input,
+    #                 export_onnx_file,
+    #                 opset_version=10, # v10 is better than v12
+    #                 verbose=False,
+    #                 do_constant_folding=True,
+    #                 input_names = ['features'],   # the model's input names
+    #                 output_names = ['box_preds', 'cls_preds', 'dir_cls_preds']) # the model's output names)   # the model's input names) # 输出名
+    
+    torch.onnx.export(model,
+                      dummy_input,
+                      export_onnx_file,
+                      opset_version=10,
+                      verbose=True,
+                      do_constant_folding=True) # 输出名
