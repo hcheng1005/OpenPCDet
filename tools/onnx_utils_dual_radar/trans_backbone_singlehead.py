@@ -110,20 +110,29 @@ def build_backbone_singlehead(ckpt,cfg):
 
 if __name__ == "__main__":
     from pcdet.config import cfg, cfg_from_yaml_file
-    
+
     cfg_file = "./cfgs/dual_radar_models/pointpillar_arbe.yaml"
-    filename_mh = "./ckpt/dual_radar/pointpillars_arbe_80.pth"
+    filename_mh = "./ckpt/dual_radar/pointpillars_arbe_100.pth"    
+    
+    # cfg_file = "./cfgs/dual_radar_models/pointpillar_liadr.yaml"
+    # filename_mh = "./ckpt/dual_radar/pointpillars_lidar_80.pth"
     
     cfg_from_yaml_file(cfg_file, cfg)
-    model_cfg=cfg.MODEL
-    pfe, dummy_input = build_backbone_singlehead(filename_mh, cfg)
-    pfe.eval().cuda()
-    export_onnx_file = "./onnx_utils_dual_radar/arbe_pp_backbone.onnx"
-    torch.onnx.export(pfe,
+    model, dummy_input = build_backbone_singlehead(filename_mh, cfg)
+    model.eval().cuda()
+    export_onnx_file = "./onnx_utils_dual_radar/arbe_pp_backbone2.onnx"
+    torch.onnx.export(model,
                     dummy_input,
                     export_onnx_file,
-                    opset_version=12,
+                    opset_version=10, # v10 is better than v12
                     verbose=True,
                     do_constant_folding=True,
                     input_names = ['features'],   # the model's input names
                     output_names = ['box_preds', 'cls_preds', 'dir_cls_preds']) # the model's output names)   # the model's input names) # 输出名
+    
+    # torch.onnx.export(model,
+    #                   dummy_input,
+    #                   export_onnx_file,
+    #                   opset_version=10,
+    #                   verbose=True,
+    #                   do_constant_folding=True) # 输出名

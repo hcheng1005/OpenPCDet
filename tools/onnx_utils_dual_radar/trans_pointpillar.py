@@ -1,7 +1,7 @@
 '''
 Date: 2023-12-28 20:30:24
-LastEditors: CharlesHAO hcheng1005@gmail.com
-LastEditTime: 2024-01-10 21:53:12
+LastEditors: chenghao hao.cheng@wuzheng.com
+LastEditTime: 2024-02-26 16:20:25
 FilePath: /OpenPCDet/tools/onnx_utils_dual_radar/trans_pointpillar.py
 '''
 import os
@@ -319,7 +319,7 @@ if __name__ == "__main__":
     from pcdet.config import cfg, cfg_from_yaml_file
     
     cfg_file = "./cfgs/dual_radar_models/pointpillar_arbe.yaml"
-    filename_mh = "./ckpt/dual_radar/pointpillars_arbe_80.pth"
+    filename_mh = "./ckpt/dual_radar/pointpillars_arbe_100.pth"    
     
     cfg_from_yaml_file(cfg_file, cfg)
     export_paramters(cfg)
