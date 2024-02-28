@@ -26,7 +26,8 @@ def replace_with_clip(self, inputs, outputs):
         out.inputs.clear()
 
     op_attrs = dict()
-    op_attrs["dense_shape"] = np.array([496, 640])
+    # op_attrs["dense_shape"] = np.array([496, 640]) #
+    op_attrs["dense_shape"] = np.array([248, 320]) # 距离/分辨率
 
     return self.layer(name="PPScatter_0", op="PPScatterPlugin", inputs=inputs, outputs=outputs, attrs=op_attrs)
 
@@ -40,9 +41,10 @@ def simplify_postprocess(onnx_model):
   print("Use onnx_graphsurgeon to adjust postprocessing part in the onnx...")
   graph = gs.import_onnx(onnx_model)
 
-  cls_preds = gs.Variable(name="cls_preds", dtype=np.float32, shape=(1, 320, 248, 18))
-  box_preds = gs.Variable(name="box_preds", dtype=np.float32, shape=(1, 320, 248, 42))
-  dir_cls_preds = gs.Variable(name="dir_cls_preds", dtype=np.float32, shape=(1, 320, 248, 12))
+  # NOTE: shape=(1, 160, 124, 18) 需保持和模型一致，不同模型此参数不同
+  cls_preds = gs.Variable(name="cls_preds", dtype=np.float32, shape=(1, 160, 124, 18))
+  box_preds = gs.Variable(name="box_preds", dtype=np.float32, shape=(1, 160, 124, 42))
+  dir_cls_preds = gs.Variable(name="dir_cls_preds", dtype=np.float32, shape=(1, 160, 124, 12))
 
   tmap = graph.tensors()
   new_inputs = [tmap["voxels"], tmap["voxel_idxs"], tmap["voxel_num"]]

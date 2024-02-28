@@ -1,7 +1,7 @@
 '''
 Date: 2023-12-28 20:30:24
 LastEditors: chenghao hao.cheng@wuzheng.com
-LastEditTime: 2024-02-26 16:20:25
+LastEditTime: 2024-02-28 09:25:30
 FilePath: /OpenPCDet/tools/onnx_utils_dual_radar/trans_pointpillar.py
 '''
 import os
@@ -278,8 +278,14 @@ param {*} cfg
 return {*}
 '''
 def build_pointpillars(ckpt,cfg):
-    grid_size = np.array([496, 640, 1])
-    model = pointpillars(cfg, grid_size)  
+    # grid_size = np.array([248, 320, 1])
+    pc_range = np.array(cfg.DATA_CONFIG.POINT_CLOUD_RANGE)
+    voxel_size = np.array(cfg.DATA_CONFIG.DATA_PROCESSOR[2]['VOXEL_SIZE'])
+    grid_size = (pc_range[3:] - pc_range[:3]) / voxel_size
+    gridx = grid_size[0].astype(np.int)
+    gridy = grid_size[1].astype(np.int)
+    
+    model = pointpillars(cfg, np.array([gridx ,gridy, 1]))  
 
     model.to('cuda').eval()
 
@@ -318,15 +324,17 @@ def build_pointpillars(ckpt,cfg):
 if __name__ == "__main__":
     from pcdet.config import cfg, cfg_from_yaml_file
     
-    cfg_file = "./cfgs/dual_radar_models/pointpillar_arbe.yaml"
-    filename_mh = "./ckpt/dual_radar/pointpillars_arbe_100.pth"    
+    cfg_file = "./cfgs/dual_radar_models/pointpillar_arbe_032.yaml"
+    filename_mh = "./ckpt/dual_radar/checkpoint_epoch_120.pth"    
     
     cfg_from_yaml_file(cfg_file, cfg)
     export_paramters(cfg)
     model_cfg=cfg.MODEL
     model, dummy_input = build_pointpillars(filename_mh, cfg)
     summary(model, input_size=[(10000, 32, 4), (1,), (10000, 4)], depth = 5)
-    # summary(model, input_data=dummy_input)
+    summary(model, input_data=dummy_input)
+    
+    print(model)
     
     model.eval().cuda()
     export_onnx_file = "./onnx_utils_dual_radar/arbe_pp_raw.onnx"
@@ -349,5 +357,5 @@ if __name__ == "__main__":
     assert check, "Simplified ONNX model could not be validated"
 
     onnx_final = simplify_preprocess(onnx_simp) # 前处理简化
-    onnx.save(onnx_final, "./onnx_utils_dual_radar/arbe_pp.onnx")
+    onnx.save(onnx_final, "./onnx_utils_dual_radar/arbe_pp_all.onnx")
     print('finished exporting onnx')
