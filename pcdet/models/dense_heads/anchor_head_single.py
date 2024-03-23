@@ -53,14 +53,17 @@ class AnchorHeadSingle(AnchorHeadTemplate):
     def forward(self, data_dict):
         spatial_features_2d = data_dict['spatial_features_2d'] # （4，384，248，216）
 
+        # 卷积操作
         cls_preds = self.conv_cls(spatial_features_2d) # 每个anchor的类别预测-->(4,18,248,216)
         box_preds = self.conv_box(spatial_features_2d) # 每个anchor的box预测-->(4,42,248,216)
 
         cls_preds = cls_preds.permute(0, 2, 3, 1).contiguous()  
         box_preds = box_preds.permute(0, 2, 3, 1).contiguous()  # [N, H, W, C] -->(4,248,216,42)
+        
         # 将预测结果存入前传结果字典
         self.forward_ret_dict['cls_preds'] = cls_preds
         self.forward_ret_dict['box_preds'] = box_preds
+        
         # 如果存在方向卷积层，则继续处理方向
         if self.conv_dir_cls is not None: 
             dir_cls_preds = self.conv_dir_cls(spatial_features_2d) # 每个anchor的方向预测-->(4,12,248,216)
@@ -70,14 +73,15 @@ class AnchorHeadSingle(AnchorHeadTemplate):
             dir_cls_preds = None
 
         if self.training:
-            # targets_dict = {
-            #     'box_cls_labels': cls_labels, # (4，321408）
-            #     'box_reg_targets': bbox_targets, # (4，321408，7）
-            #     'reg_weights': reg_weights # (4，321408）
-            # }
-            targets_dict = self.assign_targets(
-                gt_boxes=data_dict['gt_boxes'] # （4，39，8）
-            )
+            """
+            返回的targets_dict内容如下:
+                targets_dict = {
+                    'box_cls_labels': cls_labels, # (4, 321408)
+                    'box_reg_targets': bbox_targets, # (4,321408, 7)
+                    'reg_weights': reg_weights # (4, 321408)
+            }
+            """
+            targets_dict = self.assign_targets(gt_boxes=data_dict['gt_boxes'] ) # 4，39，8）
             self.forward_ret_dict.update(targets_dict)
 
         # 如果不是训练模式，则直接进行box的预测或对于双阶段网络要生成proposal(此时batch不为1)

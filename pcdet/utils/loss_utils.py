@@ -38,6 +38,8 @@ class SigmoidFocalClassificationLoss(nn.Module):
             loss: (B, #anchors, #classes) float tensor.
                 Sigmoid cross entropy loss without reduction
         """
+        # torch.log1p 是 PyTorch 中的一个函数，用于计算输入张量元素加上1后再取自然对数。具体而言，torch.log1p(x) 的计算方式是 
+        # log(1+x)，其中x是输入张量的元素。
         loss = torch.clamp(input, min=0) - input * target + \
                torch.log1p(torch.exp(-torch.abs(input)))
         return loss

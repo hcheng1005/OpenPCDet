@@ -111,9 +111,9 @@ class AnchorHeadTemplate(nn.Module):
             gt_boxes: (B, M, 8)
         Returns:
             all_targets_dict = {
-                'box_cls_labels': cls_labels, # (4，321408）
-                'box_reg_targets': bbox_targets, # (4，321408，7）
-                'reg_weights': reg_weights # (4，321408）
+                    'box_cls_labels': cls_labels, # (4, 321408)
+                    'box_reg_targets': bbox_targets, # (4,321408, 7)
+                    'reg_weights': reg_weights # (4, 321408)
             }
         """
         targets_dict = self.target_assigner.assign_targets(
@@ -123,14 +123,16 @@ class AnchorHeadTemplate(nn.Module):
 
     def get_cls_layer_loss(self):
         cls_preds = self.forward_ret_dict['cls_preds'] # (4, 248, 216, 18) 网络类别预测
-        box_cls_labels = self.forward_ret_dict['box_cls_labels'] # (4,321408) 前景anchor类别
+        box_cls_labels = self.forward_ret_dict['box_cls_labels'] # (4,321408) 前景anchor类别 321408 = 248 * 216 * 6
         batch_size = int(cls_preds.shape[0]) # 4
         cared = box_cls_labels >= 0  # [N, num_anchors] --> (4,321408) 关心的anchor
         positives = box_cls_labels > 0 # (4,321408) 前景anchor
         negatives = box_cls_labels == 0 # (4,321408) 背景anchor
         negative_cls_weights = negatives * 1.0 # 背景anchor赋予权重
+        
+        # torch.clamp 是 PyTorch 中的一个函数，用于将张量中的值限制在指定范围内。其函数原型为
         cls_weights = (negative_cls_weights + 1.0 * positives).float() # 背景 + 前景权重=分类损失权重 # (4,321408)
-        reg_weights = positives.float() # 回归损失权重
+        reg_weights = positives.float() # 回归损失权重 not used
         # 如果只有一类
         if self.num_class == 1:
             # class agnostic
@@ -138,7 +140,7 @@ class AnchorHeadTemplate(nn.Module):
 
         # 正则化并计算权重
         pos_normalizer = positives.sum(1, keepdim=True).float() # (4,1) 所有正例的和 eg:[[162.],[166.],[155.],[108.]]
-        reg_weights /= torch.clamp(pos_normalizer, min=1.0) # 正则化回归损失-->(4, 321408)
+        reg_weights /= torch.clamp(pos_normalizer, min=1.0) # 正则化回归损失-->(4, 321408) not used
         cls_weights /= torch.clamp(pos_normalizer, min=1.0) # 正则化分类损失-->(4, 321408)
         
         cls_targets = box_cls_labels * cared.type_as(box_cls_labels) # care包含了等于0的背景部分，这里只考虑前景部分-->(4, 321408)
@@ -255,11 +257,19 @@ class AnchorHeadTemplate(nn.Module):
 
         return box_loss, tb_dict
 
+    """计算loss"""
     def get_loss(self):
-        cls_loss, tb_dict = self.get_cls_layer_loss() # 计算classfiction layer的loss，tb_dict内容和cls_loss相同，形式不同，一个是torch.tensor一个是字典值
-        box_loss, tb_dict_box = self.get_box_reg_layer_loss() # 计算regression layer的loss
-        tb_dict.update(tb_dict_box) # 在tb_dict中添加tb_dict_box，在python的字典中添加值，如果添加的也是字典，用updae方法，如果是键值对则采用赋值的方式
-        rpn_loss = cls_loss + box_loss # rpn_loss是分类和回归的总损失
+        # 计算classfiction layer的loss，tb_dict内容和cls_loss相同，形式不同，一个是torch.tensor一个是字典值
+        cls_loss, tb_dict = self.get_cls_layer_loss() 
+        
+        # 计算regression layer的loss
+        box_loss, tb_dict_box = self.get_box_reg_layer_loss() 
+        
+        # 在tb_dict中添加tb_dict_box，在python的字典中添加值，如果添加的也是字典，用updae方法，如果是键值对则采用赋值的方式
+        tb_dict.update(tb_dict_box) 
+        
+        # rpn_loss是分类和回归的总损失
+        rpn_loss = cls_loss + box_loss 
 
         tb_dict['rpn_loss'] = rpn_loss.item() # 在tb_dict中添加rpn_loss，此时tb_dict中包含cls_loss,reg_loss和rpn_loss
         return rpn_loss, tb_dict
@@ -292,6 +302,8 @@ class AnchorHeadTemplate(nn.Module):
             if not isinstance(cls_preds, list) else cls_preds # cls_preds:（1, 248, 216, 18）--> batch_cls_preds:(1, 321408, 3)
         batch_box_preds = box_preds.view(batch_size, num_anchors, -1) if not isinstance(box_preds, list) \
             else torch.cat(box_preds, dim=1).view(batch_size, num_anchors, -1) # (1, 248, 216, 42) --> (1, 321408, 7)
+        
+        """生成box"""    
         batch_box_preds = self.box_coder.decode_torch(batch_box_preds, batch_anchors)
 
         if dir_cls_preds is not None:
@@ -302,9 +314,10 @@ class AnchorHeadTemplate(nn.Module):
             dir_labels = torch.max(dir_cls_preds, dim=-1)[1] # (1, 321408) --> 这里是一个分类:正向和反向
 
             period = (2 * np.pi / self.model_cfg.NUM_DIR_BINS) # pi
-            dir_rot = common_utils.limit_period(
-                batch_box_preds[..., 6] - dir_offset, dir_limit_offset, period
-            ) # 限制在0到pi之间
+            
+            # 限制在0到pi之间
+            dir_rot = common_utils.limit_period(batch_box_preds[..., 6] - dir_offset, dir_limit_offset, period) 
+            
             batch_box_preds[..., 6] = dir_rot + dir_offset + period * dir_labels.to(batch_box_preds.dtype) # 转化0.25pi到2.5pi
 
         if isinstance(self.box_coder, box_coder_utils.PreviousResidualDecoder):

@@ -37,13 +37,13 @@ class AxisAlignedTargetAssigner(object):
         """
         处理一个batch中所有点云的anchors和gt_boxes，计算前景和背景anchor的类别，box编码和回归权重
         Args:
-            all_anchors: [(N, 7), ...] [(1，248，216，1，2，7），(1，248，216，1，2，7），(1，248，216，1，2，7)]
+            all_anchors: [(N, 7), ...] [(1,248,216,1,2,7）,(1,248,216,1,2,7）,(1,248,216,1,2,7)]
             gt_boxes: (B, M, 8)
         Returns:
             all_targets_dict = {
-                'box_cls_labels': cls_labels, # (4，321408）
-                'box_reg_targets': bbox_targets, # (4，321408，7）
-                'reg_weights': reg_weights # (4，321408）
+                'box_cls_labels': cls_labels, # (4,321408）
+                'box_reg_targets': bbox_targets, # (4,321408,7）
+                'reg_weights': reg_weights # (4,321408）
             }
         """
         # 1.初始化结果list并提取对应的gt_box和类别
@@ -52,16 +52,18 @@ class AxisAlignedTargetAssigner(object):
         reg_weights = []
 
         batch_size = gt_boxes_with_classes.shape[0] # 4
-        gt_classes = gt_boxes_with_classes[:, :, -1] #（4，39）
-        gt_boxes = gt_boxes_with_classes[:, :, :-1] #（4，39，7）
+        gt_classes = gt_boxes_with_classes[:, :, -1] #（4,39）
+        gt_boxes = gt_boxes_with_classes[:, :, :-1] #（4,39,7）
 
         # 2.按照batch逐帧计算anchor的前景和背景
         for k in range(batch_size):
-            cur_gt = gt_boxes[k] # 取出当前gt_boxes (39，7）
+            cur_gt = gt_boxes[k] # 取出当前batch的所有gt_boxes (39,7）
             cnt = cur_gt.__len__() - 1 # 38
-            # 这里的循环是找到最后一个非零的box，因为预处理的时候会按照batch最大box的数量处理，不足的进行补0
+            
+            # 这里的循环是找到最后一个非零的box,因为预处理的时候会按照batch最大box的数量处理,不足的进行补0
             while cnt > 0 and cur_gt[cnt].sum() == 0:
                 cnt -= 1
+            
             # 2.1提取当前帧非零的box和类别
             cur_gt = cur_gt[:cnt + 1]
             cur_gt_classes = gt_classes[k][:cnt + 1].int()
@@ -92,6 +94,7 @@ class AxisAlignedTargetAssigner(object):
                     feature_map_size = anchors.shape[:3] #（1，248，216）
                     anchors = anchors.view(-1, anchors.shape[-1]) # (107136,7) 107136=1x248x216x1x2
                     selected_classes = cur_gt_classes[mask] # 被选择的类别 （15，）
+                    
                 # 2.2.2 调用assign_targets_single计算某一类别的anchors和gt_boxes，计算前景和背景anchor的类别，box编码和回归权重
                 single_target = self.assign_targets_single(
                     anchors,
