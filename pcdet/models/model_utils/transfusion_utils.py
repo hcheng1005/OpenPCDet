@@ -83,29 +83,30 @@ class TransformerDecoderLayer(nn.Module):
     '''
     def forward(self, query, key, query_pos, key_pos, key_padding_mask=None, attn_mask=None):
         # NxCxP to PxNxC
-        if self.self_posembed is not None:
-            query_pos_embed = self.self_posembed(query_pos).permute(2, 0, 1)
-        else:
-            query_pos_embed = None
-        if self.cross_posembed is not None:
-            key_pos_embed = self.cross_posembed(key_pos).permute(2, 0, 1)
-        else:
-            key_pos_embed = None
 
+        # 首先,使用 self_posembed 和 cross_posembed 分别计算 query_pos_embed 和 key_pos_embed,并将其维度顺序调整为 (P, N, C)
+        query_pos_embed = self.self_posembed(query_pos).permute(2, 0, 1)
+        key_pos_embed = self.cross_posembed(key_pos).permute(2, 0, 1)
+        
+        # 将 query 和 key 的维度顺序从 (N, C, P) 调整为 (P, N, C)
         query = query.permute(2, 0, 1)
         key = key.permute(2, 0, 1)
 
-        if not self.cross_only:
-            q = k = v = self.with_pos_embed(query, query_pos_embed)
-            query2 = self.self_attn(q, k, value=v)[0]
-            query = query + self.dropout1(query2)
-            query = self.norm1(query)
-        
-        query2 = self.multihead_attn(query=self.with_pos_embed(query, query_pos_embed),
-                                     key=self.with_pos_embed(key, key_pos_embed),
-                                     value=self.with_pos_embed(key, key_pos_embed), 
-                                     key_padding_mask=key_padding_mask, attn_mask=attn_mask)[0]
+        # 使用 with_pos_embed 函数将位置编码嵌入到 query 中,得到 q、k 和 v
+        q = k = v = self.with_pos_embed(query, query_pos_embed)
 
+        #　计算自注意力,得到更新后的 query,并通过残差连接和层归一化
+        query2 = self.self_attn(q, k, value=v)[0]  # self-attention
+        query = query + self.dropout1(query2)
+        query = self.norm1(query) # nn.LayerNorm(d_model)
+        
+        # 计算跨注意力,使用 with_pos_embed 函数将位置编码嵌入到 query、key 和 value 中,并执行多头注意力计算。
+        query2 = self.multihead_attn(query=self.with_pos_embed(query, query_pos_embed),
+                                        key=self.with_pos_embed(key, key_pos_embed),
+                                        value=self.with_pos_embed(key, key_pos_embed), 
+                                        key_padding_mask=key_padding_mask, attn_mask=attn_mask)[0] # cross-attention
+
+        # 将跨注意力的结果通过残差连接和层归一化,得到更新后的 query
         query = query + self.dropout2(query2)
         query = self.norm2(query)
 
@@ -116,4 +117,3 @@ class TransformerDecoderLayer(nn.Module):
         # NxCxP to PxNxC
         query = query.permute(1, 2, 0)
         return query
-

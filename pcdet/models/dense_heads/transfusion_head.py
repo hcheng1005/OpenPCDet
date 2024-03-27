@@ -157,31 +157,21 @@ class TransFusionHead(nn.Module):
                 m.momentum = self.bn_momentum
 
     def predict(self, inputs):
-        # print(f"input feature shape: {inputs.shape}")
-        # input feature shape: torch.Size([1, 512, 180, 180])
-
-        batch_size = inputs.shape[0]
+        batch_size = inputs.shape[0] # input feature shape [1, 512, 180, 180]
         
-        # 首先进过一层卷积
-        lidar_feat = self.shared_conv(inputs)
+        # 通过共享卷积层处理输入数据
+        lidar_feat = self.shared_conv(inputs) # lidar_feat shape [1, 128, 180, 180]
         
-        # print(f"lidar_feat shape: {lidar_feat.shape}")
-        # lidar_feat shape: torch.Size([1, 128, 180, 180])
+        # 将特征图展平(batchSize * channles * (H*W)) = 1 * 128 * (180*180) = 1* 128 * 32400
+        lidar_feat_flatten = lidar_feat.view(batch_size, lidar_feat.shape[1], -1) # lidar_feat_flatten shape [1, 128, 32400]
         
-        lidar_feat_flatten = lidar_feat.view(batch_size, lidar_feat.shape[1], -1)
-        
-        # print(f"lidar_feat_flatten shape: {lidar_feat_flatten.shape}")
-        # lidar_feat_flatten shape: torch.Size([1, 128, 32400])
-
+        # 生成鸟瞰视图（BEV）位置信息
         bev_pos = self.bev_pos.repeat(batch_size, 1, 1).to(lidar_feat.device)
 
         # query initialization
         # 通过 Conv+BN+ReLU 生成heatmap feature
         dense_heatmap = self.heatmap_head(lidar_feat)
-        heatmap = dense_heatmap.detach().sigmoid()
-        
-        # print(f"heatmap shape: {heatmap.shape}")
-        # heatmap shape: torch.Size([1, 10, 180, 180])
+        heatmap = dense_heatmap.detach().sigmoid() # heatmap shape = [1, 10, 180, 180] 这里的10是class number   
         
         padding = self.nms_kernel_size // 2
         local_max = torch.zeros_like(heatmap)
@@ -202,6 +192,18 @@ class TransFusionHead(nn.Module):
  
         # top num_proposals among all classes
         # 获取top k个feature
+        '''
+            在这段代码中,top_proposals = heatmap.view(batch_size, -1).argsort(dim=-1, descending=True)[..., : self.num_proposals]
+            是用来选择 top self.num_proposals 个 proposals 的。
+
+            具体来说:
+
+            heatmap 的形状是 [batch_size, num_classes, height * width]。
+            首先将 heatmap 展平成 [batch_size, num_classes * (height * width)] 的形状,即 heatmap.view(batch_size, -1)。
+            然后对最后一个维度进行排序,argsort(dim=-1, descending=True) 会返回排序后的索引。
+            最后,取排序后的前 self.num_proposals 个索引,即 [..., : self.num_proposals]。
+            所以,这里排序的对象是 heatmap 在最后一个维度上的值,也就是每个位置的 heatmap 得分。通过这种方式,我们可以选择得分最高的 self.num_proposals 个 proposals 作为后续处理的输入
+        '''
         top_proposals = heatmap.view(batch_size, -1).argsort(dim=-1, descending=True)[
             ..., : self.num_proposals
         ]
@@ -209,18 +211,34 @@ class TransFusionHead(nn.Module):
         # print(f"top_proposals shape: {top_proposals.shape}")
         # heatmap shape: torch.Size([1, 200])
 
+        '''
+            top_proposals_class = top_proposals // heatmap.shape[-1]
+
+            这行代码是用来计算每个 proposal 所属的类别。
+            heatmap 的最后一个维度表示每个位置的类别数。
+            使用整数除法 // 可以得到每个 proposal 所属的类别索引。
+            top_proposals_index = top_proposals % heatmap.shape[-1]
+
+            这行代码是用来计算每个 proposal 在 heatmap 中的位置索引。
+            使用取余运算 % 可以得到每个 proposal 在 heatmap 最后一个维度上的位置索引。
+            query_feat = lidar_feat_flatten.gather(index=top_proposals_index[:, None, :].expand(-1, lidar_feat_flatten.shape[1], -1),dim=-1,)
+
+            这行代码是用来从 lidar_feat_flatten 中选择与 top_proposals 对应的特征。
+            top_proposals_index[:, None, :] 会在中间增加一个维度,变成 [batch_size, 1, num_proposals]。
+            然后使用 expand(-1, lidar_feat_flatten.shape[1], -1) 将其扩展到 [batch_size, lidar_feat_flatten.shape[1], num_proposals]。
+            最后使用 gather 函数,根据 top_proposals_index 的索引,从 lidar_feat_flatten 中选择对应的特征,得到 query_feat。
+            总的来说,这段代码的目的是从 heatmap 中选择 top self.num_proposals 个 proposals,并根据这些 proposals 的索引从 lidar_feat_flatten 中选择对应的特征。这些特征将在后续的处理中使用。
+        '''
         top_proposals_class = top_proposals // heatmap.shape[-1]
         top_proposals_index = top_proposals % heatmap.shape[-1]
-        query_feat = lidar_feat_flatten.gather(
-            index=top_proposals_index[:, None, :].expand(-1, lidar_feat_flatten.shape[1], -1),
-            dim=-1,
-        )
+        query_feat = lidar_feat_flatten.gather(index=top_proposals_index[:, None, :].expand(-1, lidar_feat_flatten.shape[1], -1),dim=-1,)
+        
         self.query_labels = top_proposals_class
 
         # add category embedding
         one_hot = F.one_hot(top_proposals_class, num_classes=self.num_classes).permute(0, 2, 1)
         
-        query_cat_encoding = self.class_encoding(one_hot.float()) # 此处是一个全连接层
+        query_cat_encoding = self.class_encoding(one_hot.float()) # 此处是一个全连接层 （nn.Conv1d(num_class, hidden_channel, 1)）
         
         # 特征直接相加（不是拼接）
         query_feat += query_cat_encoding
@@ -264,7 +282,10 @@ class TransFusionHead(nn.Module):
     def forward(self, batch_dict):
         # BACKBONE_2D模块的输出
         feats = batch_dict['spatial_features_2d']
-        res = self.predict(feats)
+        
+        # transformer编码
+        res = self.predict(feats) 
+        
         if not self.training:
             bboxes = self.get_bboxes(res) # 解码并输出bboxes
             batch_dict['final_box_dicts'] = bboxes
@@ -512,9 +533,7 @@ class TransFusionHead(nn.Module):
 
         batch_size = preds_dicts["heatmap"].shape[0]
         batch_score = preds_dicts["heatmap"].sigmoid()
-        one_hot = F.one_hot(
-            self.query_labels, num_classes=self.num_classes
-        ).permute(0, 2, 1)
+        one_hot = F.one_hot(self.query_labels, num_classes=self.num_classes).permute(0, 2, 1)
         batch_score = batch_score * preds_dicts["query_heatmap_score"] * one_hot
         batch_center = preds_dicts["center"]
         batch_height = preds_dicts["height"]

@@ -197,51 +197,65 @@ class AnchorHeadMulti(AnchorHeadTemplate):
         self.rpn_heads = nn.ModuleList(rpn_heads) # 多检测列表
 
     def forward(self, data_dict):
+        # 从输入数据字典中提取二维空间特征
         spatial_features_2d = data_dict['spatial_features_2d']
+        # 如果存在共享的卷积层，则对空间特征进行卷积操作
         if self.shared_conv is not None:
             spatial_features_2d = self.shared_conv(spatial_features_2d)
 
         ret_dicts = []
+        # 遍历所有的区域提议网络(RPN)头部，对空间特征进行处理
         for rpn_head in self.rpn_heads:
             ret_dicts.append(rpn_head(spatial_features_2d))
 
+        # 从处理结果中提取分类预测和边界框预测
         cls_preds = [ret_dict['cls_preds'] for ret_dict in ret_dicts]
         box_preds = [ret_dict['box_preds'] for ret_dict in ret_dicts]
         ret = {
+            # 如果设置为多头分离，则保持预测结果为列表形式；否则，将预测结果沿维度1进行拼接
             'cls_preds': cls_preds if self.separate_multihead else torch.cat(cls_preds, dim=1),
             'box_preds': box_preds if self.separate_multihead else torch.cat(box_preds, dim=1),
         }
 
+        # 如果模型配置中指定使用方向分类器，则同样处理方向分类预测
         if self.model_cfg.get('USE_DIRECTION_CLASSIFIER', False):
             dir_cls_preds = [ret_dict['dir_cls_preds'] for ret_dict in ret_dicts]
             ret['dir_cls_preds'] = dir_cls_preds if self.separate_multihead else torch.cat(dir_cls_preds, dim=1)
 
+        # 更新前向传播结果字典
         self.forward_ret_dict.update(ret)
 
+        # 如果处于训练模式，根据真实边界框为预测结果分配目标
         if self.training:
             targets_dict = self.assign_targets(
                 gt_boxes=data_dict['gt_boxes']
             )
             self.forward_ret_dict.update(targets_dict)
 
+        # 如果不处于训练模式，或者即使在训练模式下也需要预测边界框，则生成预测的边界框
         if not self.training or self.predict_boxes_when_training:
             batch_cls_preds, batch_box_preds = self.generate_predicted_boxes(
                 batch_size=data_dict['batch_size'],
                 cls_preds=ret['cls_preds'], box_preds=ret['box_preds'], dir_cls_preds=ret.get('dir_cls_preds', None)
             )
 
+            # 如果批量分类预测结果为列表形式，则为每个头部生成标签映射
             if isinstance(batch_cls_preds, list):
                 multihead_label_mapping = []
                 for idx in range(len(batch_cls_preds)):
                     multihead_label_mapping.append(self.rpn_heads[idx].head_label_indices)
 
+                # 更新数据字典中的多头标签映射
                 data_dict['multihead_label_mapping'] = multihead_label_mapping
 
+            # 更新数据字典中的批量分类预测、批量边界框预测和标准化标志
             data_dict['batch_cls_preds'] = batch_cls_preds
             data_dict['batch_box_preds'] = batch_box_preds
             data_dict['cls_preds_normalized'] = False
 
+        # 返回更新后的数据字典
         return data_dict
+
 
     def get_cls_layer_loss(self):
         loss_weights = self.model_cfg.LOSS_CONFIG.LOSS_WEIGHTS
